@@ -68,7 +68,8 @@ class RentalScannerService:
         for scraper in self.scrapers:
             try:
                 listings = scraper.fetch_listings()
-                top_items = [l for l in listings[:20] if not l.is_promoted]
+                organic_items = [l for l in listings if not l.is_promoted]
+                top_items = organic_items[:20]
                 logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for /start...")
 
                 for listing in top_items:
@@ -88,6 +89,18 @@ class RentalScannerService:
                         )
                     # Safe interval between apartments
                     time.sleep(1.0)
+
+                # Mark remaining existing organic items from page 1 as seen
+                # so they will not be treated as "new" in subsequent scans
+                for listing in organic_items[20:]:
+                    database.mark_listing_seen(
+                        uid=listing.uid,
+                        source=listing.source,
+                        title=listing.title,
+                        price=listing.price,
+                        url=listing.url,
+                        sent=0
+                    )
             except Exception as e:
                 logger.error(f"Error during /start export for {scraper.name}: {e}")
 
@@ -125,9 +138,8 @@ class RentalScannerService:
         total_new = 0
         for scraper in self.scrapers:
             listings = self.scan_source(scraper)
-            top_listings = listings[:20]
 
-            for listing in top_listings:
+            for listing in listings:
                 if listing.is_promoted:
                     continue
 

@@ -78,6 +78,9 @@ class ImoRadarScraper(BaseScraper):
                             photos.append(src)
 
                 is_promoted = "promovat" in container_text.lower()
+                c_lower = container_text.lower()
+                if not any(k in c_lower for k in ["azi", "ieri", "acum"]):
+                    is_promoted = True
 
                 full_text = f"{title} {container_text}"
                 has_boiler = self.check_boiler(full_text)

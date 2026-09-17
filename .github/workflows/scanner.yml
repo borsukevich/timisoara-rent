@@ -39,3 +39,4 @@ jobs:
             git commit -m "Update rentals.db [skip ci]"
             git push
           fi
+

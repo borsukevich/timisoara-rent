@@ -37,6 +37,20 @@ class StoriaScraper(BaseScraper):
 
                 is_promoted = bool(item.get("isPromoted", False))
 
+                # Check if it is a bumped old ad (created > 2 days ago)
+                created_str = item.get("createdAtFirst") or item.get("dateCreated")
+                if created_str:
+                    try:
+                        from datetime import datetime
+                        clean_date = created_str.strip().replace(" ", "T")
+                        dt = datetime.fromisoformat(clean_date)
+                        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+                        age_days = (now - dt).total_seconds() / 86400
+                        if age_days > 2.0:
+                            is_promoted = True
+                    except Exception:
+                        pass
+
                 # Price
                 tp = item.get("totalPrice") or {}
                 price_val = tp.get("value")

@@ -39,11 +39,12 @@ class Publi24Scraper(BaseScraper):
                 item_text = item.get_text(" | ", strip=True)
                 is_promoted = "promovat" in item_text.lower() or bool(item.select('.promovat, [class*="promovat"], .badge'))
 
-                price_el = item.select_one('.price, .article-price')
-                price = price_el.get_text(strip=True) if price_el else ""
-
                 date_el = item.select_one('.article-date, .date, [class*="date"]')
                 date_text = date_el.get_text(strip=True) if date_el else ""
+
+                # If date is not today, yesterday, or just now, treat as old/promoted
+                if date_text and not any(k in date_text.lower() for k in ["azi", "ieri", "acum"]):
+                    is_promoted = True
 
                 district = "Timișoara"
                 loc_m = re.search(r'(?:zona|în)\s+([A-Za-zĂÎÂȘȚăîâșț\s-]+)', title, re.IGNORECASE)

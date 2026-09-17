@@ -17,7 +17,7 @@ CRITERIA = {
 # Target URLs verified by user
 SOURCES_CONFIG = {
     "olx": {
-        "url": "https://www.olx.ro/imobiliare/apartamente-garsoniere-de-inchiriat/3-camere/timisoara/?currency=EUR&search%5Bfilter_float_price:to%5D=800",
+        "url": "https://www.olx.ro/imobiliare/apartamente-garsoniere-de-inchiriat/3-camere/timisoara/?currency=EUR&search%5Bfilter_float_price:to%5D=800&search%5Border%5D=created_at:desc",
         "name": "OLX.ro",
         "max_items": 20
     },
