@@ -27,6 +27,13 @@ def init_db():
                 has_received_initial INTEGER DEFAULT 0
             )
         """)
+        # Safe migration if table already existed without column
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(subscribers)")
+        cols = [col[1] for col in cur.fetchall()]
+        if "has_received_initial" not in cols:
+            conn.execute("ALTER TABLE subscribers ADD COLUMN has_received_initial INTEGER DEFAULT 0")
+
         conn.commit()
 
 def is_listing_seen(uid: str) -> bool:
