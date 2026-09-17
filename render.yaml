@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: timisoara-rent-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: TELEGRAM_BOT_TOKEN
+        value: 8903183307:AAFzLWtCd7rNGCipc8LXAbFIpCBe0LCU9Ho
