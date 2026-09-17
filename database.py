@@ -36,10 +36,13 @@ def init_db():
 
         conn.commit()
 
-def is_listing_seen(uid: str) -> bool:
+def is_listing_seen(uid: str, url: str = "") -> bool:
     with get_connection() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT 1 FROM seen_listings WHERE uid = ?", (uid,))
+        if url:
+            cur.execute("SELECT 1 FROM seen_listings WHERE uid = ? OR url = ?", (uid, url))
+        else:
+            cur.execute("SELECT 1 FROM seen_listings WHERE uid = ?", (uid,))
         return cur.fetchone() is not None
 
 def mark_listing_seen(uid: str, source: str, title: str, price: str, url: str, sent: int = 1):

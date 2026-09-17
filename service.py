@@ -94,7 +94,7 @@ class RentalScannerService:
         for scraper in self.scrapers:
             try:
                 listings = scraper.fetch_listings()
-                organic_items = [l for l in listings if not l.is_promoted]
+                organic_items = [l for l in listings if not l.is_promoted and not scraper.is_invalid_rooms(l.title)]
                 top_items = organic_items[:20]
                 logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for /start...")
 
@@ -169,7 +169,12 @@ class RentalScannerService:
                 if listing.is_promoted:
                     continue
 
-                if database.is_listing_seen(listing.uid):
+                if database.is_listing_seen(listing.uid, listing.url):
+                    continue
+
+                if scraper.is_invalid_rooms(listing.title):
+                    logger.info(f"[{listing.source}] Skipping listing due to room criteria: {listing.title}")
+                    database.mark_listing_seen(listing.uid, listing.source, listing.title, listing.price, listing.url, sent=0)
                     continue
 
                 # Truly new organic listing found!

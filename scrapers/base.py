@@ -239,5 +239,16 @@ class BaseScraper:
         clean = re.sub(r'\s+', ' ', clean).strip()
         return clean
 
+    def is_invalid_rooms(self, text: str) -> bool:
+        """Returns True if title/text explicitly indicates only 1 or 2 rooms / studio / garsoniera."""
+        if not text:
+            return False
+        t = text.lower()
+        if any(w in t for w in ["3 camere", "3-camere", "trei camere", "4 camere", "4-camere", "patru camere", "5 camere"]):
+            return False
+        if re.search(r'\b(?:1|2)\s*camer[ea]\b|\b(?:o|doua|două)\s*camere\b|\bgarsonier[aă]\b|\bstudio\b', t):
+            return True
+        return False
+
     def fetch_listings(self) -> List[Listing]:
         raise NotImplementedError

@@ -24,8 +24,11 @@ def translate_to_russian(text: str, max_chars: int = 500) -> str:
         if r.status_code == 200:
             res = r.json()
             if res and isinstance(res, list) and len(res) > 0 and isinstance(res[0], list):
-                translated = "".join(part[0] for part in res[0] if part and part[0])
-                return translated.strip()
+                translated = "".join(part[0] for part in res[0] if part and part[0]).strip()
+                import re
+                if re.match(r'^(?:я\s+)?снимаю\s+квартиру', translated, re.IGNORECASE):
+                    translated = re.sub(r'^(?:я\s+)?снимаю\s+квартиру', 'Сдается квартира', translated, flags=re.IGNORECASE)
+                return translated
     except Exception as e:
         logger.warning(f"Translation error: {e}")
 

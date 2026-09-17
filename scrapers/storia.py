@@ -26,6 +26,7 @@ class StoriaScraper(BaseScraper):
             page_props = data.get("props", {}).get("pageProps", {})
             items = (page_props.get("data") or {}).get("searchAds", {}).get("items", [])
 
+            seen_slugs = set()
             for item in items:
                 if not isinstance(item, dict):
                     continue
@@ -33,6 +34,11 @@ class StoriaScraper(BaseScraper):
                 ad_id = str(item.get("id"))
                 title = (item.get("title") or "").strip()
                 slug = item.get("slug") or ""
+                if slug:
+                    if slug in seen_slugs:
+                        continue
+                    seen_slugs.add(slug)
+
                 url = f"https://www.storia.ro/ro/oferta/{slug}" if slug else item.get("href", "")
 
                 is_promoted = bool(item.get("isPromoted", False))
@@ -123,7 +129,7 @@ class StoriaScraper(BaseScraper):
                 commission_info = "0% (Без комиссии)" if is_owner else "Уточнять (обычно 50%)"
 
                 listings.append(Listing(
-                    uid=f"storia_{ad_id}",
+                    uid=f"storia_{slug}" if slug else f"storia_{ad_id}",
                     source="storia",
                     title=title,
                     price=price,
