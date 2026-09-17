@@ -1,0 +1,41 @@
+name: Timisoara Rental Scanner Cron
+
+on:
+  schedule:
+    # Run every 15 minutes (cron)
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run rental scanner
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || '8903183307:AAFzLWtCd7rNGCipc8LXAbFIpCBe0LCU9Ho' }}
+        run: python main.py --scan-once
+
+      - name: Commit updated database
+        run: |
+          git config --global user.name "Rental Scanner Bot"
+          git config --global user.email "bot@timisoara-rent.local"
+          git add rentals.db || true
+          if git diff --staged --quiet; then
+            echo "No changes in database."
+          else
+            git commit -m "Update rentals.db [skip ci]"
+            git push
+          fi

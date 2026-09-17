@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  timisoara-rent:
+    build: .
+    container_name: timisoara_rent_bot
+    restart: unless-stopped
+    volumes:
+      # Persist SQLite database on host machine
+      - ./rentals.db:/app/rentals.db
+    environment:
+      - PYTHONUNBUFFERED=1
+
