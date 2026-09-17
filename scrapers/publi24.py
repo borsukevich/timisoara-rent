@@ -37,13 +37,16 @@ class Publi24Scraper(BaseScraper):
                 title = title_el.get_text(strip=True) if title_el else "Apartament Timișoara"
 
                 item_text = item.get_text(" | ", strip=True)
+                price_el = item.select_one('.price, .article-price')
+                price = price_el.get_text(strip=True) if price_el else ""
+
                 is_promoted = "promovat" in item_text.lower() or bool(item.select('.promovat, [class*="promovat"], .badge'))
 
                 date_el = item.select_one('.article-date, .date, [class*="date"]')
                 date_text = date_el.get_text(strip=True) if date_el else ""
 
-                # If date is not today, yesterday, or just now, treat as old/promoted
-                if date_text and not any(k in date_text.lower() for k in ["azi", "ieri", "acum"]):
+                # Strictly today or just now (ignore yesterday or older)
+                if date_text and not any(k in date_text.lower() for k in ["azi", "acum"]):
                     is_promoted = True
 
                 district = "Timișoara"

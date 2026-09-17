@@ -36,6 +36,13 @@ class ImobiliareScraper(BaseScraper):
                 classes = " ".join(card.get("class", []))
                 is_promoted = "promovat" in classes.lower() or bool(card.select('.promovat, [class*="promovat"]'))
 
+                # Date check from .posted-at
+                p_el = card.select_one('.posted-at, [class*="posted-at"]')
+                posted_at = p_el.get_text(strip=True) if p_el else ""
+                is_fresh = bool(posted_at and any(k in posted_at.lower() for k in ["azi", "ore", "acum"]))
+                if not is_fresh:
+                    is_promoted = True
+
                 # Price
                 price = ""
                 price_match = re.search(r'(\d+[\s.]?\d*)\s*€', card.get_text())
@@ -115,8 +122,8 @@ class ImobiliareScraper(BaseScraper):
                     is_promoted=is_promoted,
                     is_owner=is_owner,
                     has_boiler=has_boiler,
-                    date_text="Azi" if "azi" in card_text.lower() else None,
-                    is_today=True
+                    date_text=posted_at,
+                    is_today=is_fresh
                 ))
 
         except Exception as e:

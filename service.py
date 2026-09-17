@@ -37,6 +37,32 @@ class RentalScannerService:
             Publi24Scraper(config.SOURCES_CONFIG["publi24"]["url"]),
         ]
 
+        # Seed initial state if DB is completely empty (cold-start protection)
+        self.seed_initial_state_if_needed()
+
+    def seed_initial_state_if_needed(self):
+        """If the database is completely empty, seed existing market snapshot without alerting."""
+        stats = database.get_stats()
+        if stats["total_seen"] == 0:
+            logger.info("Fresh database detected. Seeding initial listings without alerts...")
+            count = 0
+            for scraper in self.scrapers:
+                try:
+                    items = scraper.fetch_listings()
+                    for it in items:
+                        database.mark_listing_seen(
+                            uid=it.uid,
+                            source=it.source,
+                            title=it.title,
+                            price=it.price,
+                            url=it.url,
+                            sent=0
+                        )
+                        count += 1
+                except Exception as e:
+                    logger.error(f"Error seeding {scraper.name}: {e}")
+            logger.info(f"Cold-start seeding finished: {count} listings recorded.")
+
     def on_start_command(self, chat_id: int):
         """When user clicks /start: run initial export once, then switch to pure monitoring."""
         if database.has_user_received_initial(chat_id):

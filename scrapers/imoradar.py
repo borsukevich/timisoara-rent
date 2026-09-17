@@ -79,7 +79,7 @@ class ImoRadarScraper(BaseScraper):
 
                 is_promoted = "promovat" in container_text.lower()
                 c_lower = container_text.lower()
-                if not any(k in c_lower for k in ["azi", "ieri", "acum"]):
+                if not any(k in c_lower for k in ["azi", "acum"]):
                     is_promoted = True
 
                 full_text = f"{title} {container_text}"

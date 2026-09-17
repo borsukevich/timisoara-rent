@@ -37,7 +37,7 @@ class StoriaScraper(BaseScraper):
 
                 is_promoted = bool(item.get("isPromoted", False))
 
-                # Check if it is a bumped old ad (created > 2 days ago)
+                # Check if it is a bumped or old ad (not created today / > 24 hours)
                 created_str = item.get("createdAtFirst") or item.get("dateCreated")
                 if created_str:
                     try:
@@ -45,8 +45,8 @@ class StoriaScraper(BaseScraper):
                         clean_date = created_str.strip().replace(" ", "T")
                         dt = datetime.fromisoformat(clean_date)
                         now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
-                        age_days = (now - dt).total_seconds() / 86400
-                        if age_days > 2.0:
+                        age_hours = (now - dt).total_seconds() / 3600
+                        if age_hours > 24.0 or dt.date() != now.date():
                             is_promoted = True
                     except Exception:
                         pass

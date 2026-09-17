@@ -33,16 +33,16 @@ class OLXScraper(BaseScraper):
                 promo = ad.get("promotion", {})
                 is_promoted = bool(ad.get("isPromoted") or promo.get("top_ad") or promo.get("highlighted"))
 
-                # Check if it is a bumped old ad (created > 2 days ago)
+                # Check if it is a bumped or old ad (not created today / > 24 hours)
                 created_str = ad.get("createdTime")
                 if created_str:
                     try:
                         from datetime import datetime
                         dt = datetime.fromisoformat(created_str.strip())
                         now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
-                        age_days = (now - dt).total_seconds() / 86400
-                        if age_days > 2.0:
-                            is_promoted = True  # Treat bumped old ads as promoted so they are skipped
+                        age_hours = (now - dt).total_seconds() / 3600
+                        if age_hours > 24.0 or dt.date() != now.date():
+                            is_promoted = True  # Treat bumped/old ads as promoted so they are skipped
                     except Exception:
                         pass
 
