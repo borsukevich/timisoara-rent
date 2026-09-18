@@ -66,7 +66,7 @@ class RentalScannerService:
                 "Сейчас система в режиме реального времени проверяет площадки <b>каждые 3 минуты</b> "
                 "и будет присылать <b>только новые варианты</b> сразу после их публикации."
             )
-            self.notifier.send_text_message(chat_id, status_msg)
+            self.notifier.send_text_message(chat_id, status_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
             return
 
         if self.is_exporting_initial:
@@ -82,7 +82,7 @@ class RentalScannerService:
             "(OLX, Storia, Imobiliare, ImoRadar24, Publi24) с полным описанием без сокращений, точной квадратурой, этажом, ЖК, паркингом и метками на карте.\n\n"
             "⏳ <i>Это займет около 1–2 минут (отправляю порциями, чтобы не сработал спам-фильтр Telegram)...</i>"
         )
-        self.notifier.send_text_message(chat_id, intro_msg)
+        self.notifier.send_text_message(chat_id, intro_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
 
         sent_count = 0
         for scraper in self.scrapers:
@@ -145,7 +145,7 @@ class RentalScannerService:
             f"📡 <b>Мониторинг активен:</b> теперь каждые 3 минуты бот проверяет все площадки и будет "
             f"присылать только свежие варианты сразу после их публикации!"
         )
-        self.notifier.send_text_message(chat_id, finish_msg)
+        self.notifier.send_text_message(chat_id, finish_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
         self.is_exporting_initial = False
         logger.info(f"Daily export completed. Sent {sent_count} listings to {chat_id}.")
 

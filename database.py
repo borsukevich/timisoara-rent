@@ -1,5 +1,5 @@
 import sqlite3
-from typing import List
+from typing import List, Optional
 from config import DB_PATH
 
 from contextlib import contextmanager
@@ -32,6 +32,18 @@ def init_db():
                 first_name TEXT,
                 subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 has_received_initial INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS favorites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER,
+                listing_uid TEXT,
+                title TEXT,
+                price TEXT,
+                url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(chat_id, listing_uid)
             )
         """)
         # Safe migration if table already existed without column
@@ -113,3 +125,75 @@ def is_db_empty() -> bool:
         cur.execute("SELECT COUNT(*) FROM seen_listings")
         count = cur.fetchone()[0]
         return count == 0
+
+def get_listing_by_uid(uid: str) -> Optional[dict]:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT uid, source, title, price, url FROM seen_listings WHERE uid = ?", (uid,))
+        row = cur.fetchone()
+        if row:
+            return {
+                "uid": row[0],
+                "source": row[1],
+                "title": row[2],
+                "price": row[3],
+                "url": row[4]
+            }
+        return None
+
+def is_favorite(chat_id: int, uid: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM favorites WHERE chat_id = ? AND listing_uid = ?", (chat_id, uid))
+        return cur.fetchone() is not None
+
+def toggle_favorite(chat_id: int, uid: str) -> bool:
+    """Toggles favorite status. Returns True if added, False if removed."""
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM favorites WHERE chat_id = ? AND listing_uid = ?", (chat_id, uid))
+        if cur.fetchone():
+            cur.execute("DELETE FROM favorites WHERE chat_id = ? AND listing_uid = ?", (chat_id, uid))
+            conn.commit()
+            return False
+        else:
+            listing = get_listing_by_uid(uid) or {}
+            title = listing.get("title", "Apartament Timișoara")
+            price = listing.get("price", "")
+            url = listing.get("url", "")
+            cur.execute("""
+                INSERT OR REPLACE INTO favorites (chat_id, listing_uid, title, price, url)
+                VALUES (?, ?, ?, ?, ?)
+            """, (chat_id, uid, title, price, url))
+            conn.commit()
+            return True
+
+def remove_favorite(chat_id: int, uid: str) -> bool:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM favorites WHERE chat_id = ? AND listing_uid = ?", (chat_id, uid))
+        conn.commit()
+        return cur.rowcount > 0
+
+def get_favorites(chat_id: int) -> List[dict]:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT f.listing_uid, f.title, f.price, f.url, f.created_at, s.source
+            FROM favorites f
+            LEFT JOIN seen_listings s ON f.listing_uid = s.uid
+            WHERE f.chat_id = ?
+            ORDER BY f.created_at DESC
+        """, (chat_id,))
+        rows = cur.fetchall()
+        return [
+            {
+                "listing_uid": r[0],
+                "title": r[1],
+                "price": r[2],
+                "url": r[3],
+                "created_at": r[4],
+                "source": r[5] or "portal"
+            }
+            for r in rows
+        ]
