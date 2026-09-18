@@ -225,9 +225,6 @@ class StoriaScraper(BaseScraper):
                         try:
                             year_int = int(build_year)
                             listing.build_year = year_int
-                            if year_int < 2010:
-                                listing.exclusion_reason = f"Год постройки {year_int} (< 2010)"
-                                return None
                             listing.building_type = f"Дом {year_int} года"
                         except Exception:
                             pass

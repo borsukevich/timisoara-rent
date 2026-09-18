@@ -12,7 +12,6 @@ CRITERIA = {
     "min_price_eur": 400,
     "max_price_eur": 800,
     "min_area_sqm": 50,
-    "min_building_year": 2010,
     "city": "Timișoara",
 }
 

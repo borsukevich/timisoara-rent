@@ -292,9 +292,6 @@ class Publi24Scraper(BaseScraper):
                 if m_yr:
                     year_int = int(m_yr.group(1))
                     listing.build_year = year_int
-                    if year_int < 2010:
-                        listing.exclusion_reason = f"Год постройки {year_int} (< 2010)"
-                        return None
                     listing.building_type = f"{listing.building_type} | Дом {year_int} года" if listing.building_type != "Обычный фонд" else f"Дом {year_int} года"
 
             # 5. Extract amenities & contacts from full page text
@@ -303,9 +300,6 @@ class Publi24Scraper(BaseScraper):
                 parsed_year = self.extract_build_year(page_text)
                 if parsed_year:
                     listing.build_year = parsed_year
-                    if parsed_year < 2010:
-                        listing.exclusion_reason = f"Год постройки {parsed_year} (< 2010)"
-                        return None
                     listing.building_type = f"{listing.building_type} | Дом {parsed_year} года" if listing.building_type != "Обычный фонд" else f"Дом {parsed_year} года"
             if not listing.has_boiler:
                 listing.has_boiler = self.check_boiler(page_text)

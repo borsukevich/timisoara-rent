@@ -198,13 +198,10 @@ class ImobiliareScraper(BaseScraper):
                 # 5. Analyze features strictly from listing content (title + description + specs)
                 content_text = f"{listing.title} {listing.description} {chars_text}"
 
-                # Building year filter: if year is found and < 2010, exclude
+                # Building year (informative)
                 build_year = self.extract_build_year(content_text)
                 if build_year:
                     listing.build_year = build_year
-                    if build_year < 2010:
-                        listing.exclusion_reason = f"Год постройки {build_year} (< 2010)"
-                        return None
                     listing.building_type = f"{listing.building_type} | Дом {build_year} года" if listing.building_type != "Обычный дом" else f"Дом {build_year} года"
 
                 listing.has_boiler = self.check_boiler(content_text)

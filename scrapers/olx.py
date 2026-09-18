@@ -191,10 +191,6 @@ class OLXScraper(BaseScraper):
                 if not build_year:
                     build_year = self.extract_build_year(f"{title} {desc}")
 
-                # Year filter: if year is explicitly specified and < 2010, exclude
-                if not exclusion_reason and build_year and build_year < 2010:
-                    exclusion_reason = f"Год постройки {build_year} (< 2010)"
-
                 if build_year:
                     building_type = f"{building_type} | Дом {build_year} года" if building_type != "Обычный фонд" else f"Дом {build_year} года"
 

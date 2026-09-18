@@ -95,17 +95,12 @@ class RentalScannerService:
                     price_eur = scraper.parse_price_eur(listing.price)
                     if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
                         continue
-                    if listing.build_year and listing.build_year < config.CRITERIA.get("min_building_year", 2010):
-                        continue
 
                     if hasattr(scraper, "enrich_listing_details"):
                         enriched = scraper.enrich_listing_details(listing)
                         if not enriched:
                             continue
                         listing = enriched
-
-                    if listing.build_year and listing.build_year < config.CRITERIA.get("min_building_year", 2010):
-                        continue
 
                     ok = self.notifier.send_listing(chat_id, listing)
                     if ok:
@@ -191,12 +186,6 @@ class RentalScannerService:
                     database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
                     continue
 
-                # Filter building year if known beforehand
-                if listing.build_year and listing.build_year < config.CRITERIA.get("min_building_year", 2010):
-                    logger.info(f"🚫 [{listing.source}] Excluded: Год постройки {listing.build_year} (< 2010) | {listing.title}")
-                    database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
-                    continue
-
                 # Truly new organic listing found!
                 logger.info(f"🔥 NEW LISTING FOUND: [{listing.source}] {listing.title} ({listing.price}) - {listing.url}")
 
@@ -215,19 +204,6 @@ class RentalScannerService:
                         )
                         continue
                     listing = enriched
-
-                # Filter building year if revealed during enrichment
-                if listing.build_year and listing.build_year < config.CRITERIA.get("min_building_year", 2010):
-                    logger.info(f"🚫 [{listing.source}] Excluded: Год постройки {listing.build_year} (< 2010) | {listing.title}")
-                    database.mark_listing_seen(
-                        uid=listing.uid,
-                        source=listing.source,
-                        title=listing.title,
-                        price=listing.price,
-                        url=listing.url,
-                        sent=0
-                    )
-                    continue
 
                 # Broadcast to Telegram subscribers
                 sent_count = self.notifier.broadcast_listing(listing)
