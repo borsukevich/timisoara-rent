@@ -12,7 +12,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             response_data = {
                 "status": "running",
                 "service": "Timisoara Rent Scanner Bot",
-                "version": "1.2.0",
+                "version": "1.3.0",
                 "stats": stats
             }
             body = json.dumps(response_data, indent=2).encode("utf-8")

@@ -12,12 +12,32 @@ class ImobiliareScraper(BaseScraper):
     def fetch_listings(self) -> List[Listing]:
         listings = []
         try:
-            r = requests.get(self.url, impersonate="chrome124", timeout=15)
-            if r.status_code != 200:
-                print(f"[Imobiliare] Error: HTTP {r.status_code}")
+            html_text = ""
+            try:
+                r = requests.get(self.url, impersonate="chrome124", timeout=12)
+                if r.status_code == 200:
+                    html_text = r.text
+            except Exception:
+                pass
+
+            if not html_text:
+                import urllib.request
+                req = urllib.request.Request(
+                    self.url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    html_text = resp.read().decode("utf-8", errors="replace")
+
+            if not html_text:
+                print(f"[Imobiliare] Failed to retrieve page content")
                 return []
 
-            soup = BeautifulSoup(r.text, "html.parser")
+            soup = BeautifulSoup(html_text, "html.parser")
             cards = soup.select("[data-id]")
 
             for card in cards:
@@ -178,9 +198,29 @@ class ImobiliareScraper(BaseScraper):
     def enrich_listing_details(self, listing: Listing) -> Optional[Listing]:
         """Fetches the full offer page on Imobiliare to extract complete description, boiler, phone, etc."""
         try:
-            r = requests.get(listing.url, impersonate="chrome124", timeout=10)
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, "html.parser")
+            html_text = ""
+            try:
+                r = requests.get(listing.url, impersonate="chrome124", timeout=10)
+                if r.status_code == 200:
+                    html_text = r.text
+            except Exception:
+                pass
+
+            if not html_text:
+                import urllib.request
+                req = urllib.request.Request(
+                    listing.url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    html_text = resp.read().decode("utf-8", errors="replace")
+
+            if html_text:
+                soup = BeautifulSoup(html_text, "html.parser")
 
                 # 1. Full description from schema.org / Product
                 full_desc = ""

@@ -461,7 +461,9 @@ class TelegramNotifier:
                     elif (
                         t_lower.startswith("/reset")
                         or t_lower.startswith("/restart")
-                        or any(k in t_lower for k in ["перезапуск", "сброс", "заново", "рестарт", "restart", "reset", "обнови"])
+                        or any(k in t_lower for k in [
+                            "перезапу", "поиск", "сброс", "занов", "рестарт", "restart", "reset", "обнови", "очист"
+                        ])
                     ):
                         logger.info(f"[Telegram] /reset triggered by {chat_id} (@{username}) with text: '{text}'")
                         if on_reset_command:
