@@ -106,3 +106,10 @@ def get_stats() -> dict:
             "by_source": by_source,
             "total_subscribers": total_subscribers
         }
+
+def is_db_empty() -> bool:
+    with get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM seen_listings")
+        count = cur.fetchone()[0]
+        return count == 0
