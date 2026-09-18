@@ -21,6 +21,23 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path in ["/diag"]:
+            results = {}
+            from scrapers import ImobiliareScraper, StoriaScraper, Publi24Scraper, OLXScraper
+            import config
+            for cls, name in [(ImobiliareScraper, "imobiliare"), (StoriaScraper, "storia"), (Publi24Scraper, "publi24"), (OLXScraper, "olx")]:
+                try:
+                    s = cls(config.SOURCES_CONFIG[name]["url"])
+                    items = s.fetch_listings()
+                    results[name] = {"count": len(items), "status": "ok"}
+                except Exception as e:
+                    results[name] = {"count": 0, "status": f"error: {e}"}
+            body = json.dumps(results, indent=2).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self.send_response(404)
             self.end_headers()
