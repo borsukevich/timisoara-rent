@@ -53,6 +53,10 @@ def init_db():
         if "has_received_initial" not in cols:
             conn.execute("ALTER TABLE subscribers ADD COLUMN has_received_initial INTEGER DEFAULT 0")
 
+        # Clean up deprecated imoradar source completely
+        conn.execute("DELETE FROM seen_listings WHERE source = 'imoradar'")
+        conn.execute("DELETE FROM favorites WHERE listing_uid LIKE 'imoradar%'")
+
         conn.commit()
 
 def is_listing_seen(uid: str, url: str = "") -> bool:

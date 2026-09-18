@@ -33,11 +33,6 @@ SOURCES_CONFIG = {
         "name": "Imobiliare.ro",
         "max_items": 20
     },
-    "imoradar": {
-        "url": "https://www.imoradar24.ro/apartamente-de-inchiriat/judetul-timis/timisoara?rooms=3,4&price=400-800&sort=latest",
-        "name": "ImoRadar24.ro",
-        "max_items": 20
-    },
     "publi24": {
         "url": "https://www.publi24.ro/anunturi/imobiliare/de-inchiriat/apartamente/apartamente-3-camere/timis/timisoara/?livingspace=50-&minprice=400&maxprice=800&sort=date_desc",
         "name": "Publi24.ro",

@@ -11,8 +11,7 @@
   1. `OLX.ro`
   2. `Storia.ro`
   3. `Imobiliare.ro`
-  4. `ImoRadar24.ro`
-  5. `Publi24.ro`
+  4. `Publi24.ro`
 
 ---
 

@@ -9,7 +9,6 @@ from scrapers import (
     OLXScraper,
     StoriaScraper,
     ImobiliareScraper,
-    ImoRadarScraper,
     Publi24Scraper
 )
 from telegram_notifier import TelegramNotifier
@@ -78,8 +77,8 @@ class RentalScannerService:
         
         intro_msg = (
             "🚀 <b>Запускаю полное сканирование!</b>\n\n"
-            "Сейчас соберу и отправлю вам <b>все актуальные объявления за день</b> со всех 5 площадок "
-            "(OLX, Storia, Imobiliare, ImoRadar24, Publi24) с полным описанием без сокращений, точной квадратурой, этажом, ЖК, паркингом и метками на карте.\n\n"
+            "Сейчас соберу и отправлю вам <b>все актуальные объявления за день</b> со всех 4 площадок "
+            "(OLX, Storia, Imobiliare, Publi24) с полным описанием без сокращений, точной квадратурой, этажом, ЖК, паркингом и метками на карте.\n\n"
             "⏳ <i>Это займет около 1–2 минут (отправляю порциями, чтобы не сработал спам-фильтр Telegram)...</i>"
         )
         self.notifier.send_text_message(chat_id, intro_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
