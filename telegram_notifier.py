@@ -10,7 +10,8 @@ import database
 class TelegramNotifier:
     REPLY_KEYBOARD = {
         "keyboard": [
-            [{"text": "⭐ Избранные квартиры"}, {"text": "📊 Статистика"}]
+            [{"text": "⭐ Избранные квартиры"}, {"text": "📊 Статистика"}],
+            [{"text": "🔄 Перезапустить поиск"}]
         ],
         "resize_keyboard": True,
         "is_persistent": True
@@ -25,8 +26,9 @@ class TelegramNotifier:
         try:
             commands = [
                 {"command": "favorites", "description": "⭐ Избранные квартиры"},
+                {"command": "reset", "description": "🔄 Сброс и повторный поиск"},
                 {"command": "stats", "description": "📊 Статистика базы"},
-                {"command": "start", "description": "🚀 Перезапуск / Статус"}
+                {"command": "start", "description": "🚀 Статус / Запуск мониторинга"}
             ]
             requests.post(f"{self.base_url}/setMyCommands", json={"commands": commands}, timeout=5)
         except Exception:
@@ -369,7 +371,7 @@ class TelegramNotifier:
         )
         self.send_text_message(chat_id, msg, reply_markup=self.REPLY_KEYBOARD)
 
-    def poll_updates_once(self, offset: int = 0, on_start_command=None) -> int:
+    def poll_updates_once(self, offset: int = 0, on_start_command=None, on_reset_command=None) -> int:
         """Polls Telegram for commands, callback buttons and registers new subscribers."""
         try:
             r = requests.get(f"{self.base_url}/getUpdates", params={"offset": offset, "timeout": 2}, timeout=5)
@@ -438,6 +440,17 @@ class TelegramNotifier:
                             self.send_text_message(
                                 chat_id,
                                 "✅ <b>Мониторинг активен!</b> Бот проверяет площадки каждые 3 минуты.",
+                                reply_markup=self.REPLY_KEYBOARD
+                            )
+                    elif text.startswith("/reset") or text.startswith("/restart") or "перезапуск" in text.lower():
+                        print(f"[Telegram] /reset received from: {chat_id} (@{username})")
+                        if on_reset_command:
+                            on_reset_command(chat_id)
+                        else:
+                            database.reset_seen_listings()
+                            self.send_text_message(
+                                chat_id,
+                                "🔄 <b>База поиска сброшена!</b> Отправьте /start для запуска новой выгрузки.",
                                 reply_markup=self.REPLY_KEYBOARD
                             )
                     elif text.startswith("/favorites") or text.startswith("/fav") or "избранн" in text.lower():

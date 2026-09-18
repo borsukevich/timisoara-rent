@@ -63,7 +63,8 @@ class RentalScannerService:
                 "✅ <b>Мониторинг уже активен!</b>\n\n"
                 "Выгрузка актуальных вариантов за день уже была выполнена.\n"
                 "Сейчас система в режиме реального времени проверяет площадки <b>каждые 3 минуты</b> "
-                "и будет присылать <b>только новые варианты</b> сразу после их публикации."
+                "и будет присылать <b>только новые варианты</b> сразу после их публикации.\n\n"
+                "💡 <i>Если вы хотите заново получить все варианты за день, нажмите кнопку «🔄 Перезапустить поиск» или отправьте /reset.</i>"
             )
             self.notifier.send_text_message(chat_id, status_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
             return
@@ -72,9 +73,6 @@ class RentalScannerService:
             self.notifier.send_text_message(chat_id, "⏳ Выгрузка уже выполняется, пожалуйста, подождите немного...")
             return
 
-        self.is_exporting_initial = True
-        logger.info(f"User {chat_id} pressed /start. Starting full daily export...")
-        
         intro_msg = (
             "🚀 <b>Запускаю полное сканирование!</b>\n\n"
             "Сейчас соберу и отправлю вам <b>все актуальные объявления за день</b> со всех 4 площадок "
@@ -82,6 +80,29 @@ class RentalScannerService:
             "⏳ <i>Это займет около 1–2 минут (отправляю порциями, чтобы не сработал спам-фильтр Telegram)...</i>"
         )
         self.notifier.send_text_message(chat_id, intro_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
+        self.run_export(chat_id)
+
+    def on_reset_command(self, chat_id: int):
+        """When user sends /reset or taps '🔄 Перезапустить поиск': clear seen history and run fresh export."""
+        if self.is_exporting_initial:
+            self.notifier.send_text_message(chat_id, "⏳ Выгрузка уже выполняется, пожалуйста, подождите...")
+            return
+
+        logger.info(f"User {chat_id} triggered reset. Clearing seen listings...")
+        database.reset_seen_listings()
+
+        reset_msg = (
+            "🔄 <b>База поиска успешно сброшена!</b>\n\n"
+            "Запускаю повторный сбор всех актуальных объявлений за день со всех 4 площадок "
+            "(без ограничений по годам, с кнопками «⭐ В избранное» и каждой характеристикой на новой строке).\n\n"
+            "⏳ <i>Пожалуйста, подождите 1–2 минуты...</i>"
+        )
+        self.notifier.send_text_message(chat_id, reset_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
+        self.run_export(chat_id)
+
+    def run_export(self, chat_id: int):
+        self.is_exporting_initial = True
+        logger.info(f"Starting export for user {chat_id}...")
 
         sent_count = 0
         for scraper in self.scrapers:
@@ -89,7 +110,7 @@ class RentalScannerService:
                 listings = scraper.fetch_listings()
                 organic_items = [l for l in listings if not l.is_promoted]
                 top_items = organic_items[:30]
-                logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for /start...")
+                logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for {chat_id}...")
 
                 for listing in reversed(top_items):
                     price_eur = scraper.parse_price_eur(listing.price)
@@ -128,7 +149,7 @@ class RentalScannerService:
                         sent=0
                     )
             except Exception as e:
-                logger.error(f"Error during /start export for {scraper.name}: {e}")
+                logger.error(f"Error during export for {scraper.name}: {e}")
 
         # Mark user as having received the initial batch
         database.mark_user_initial_received(chat_id)
@@ -141,13 +162,14 @@ class RentalScannerService:
         )
         self.notifier.send_text_message(chat_id, finish_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
         self.is_exporting_initial = False
-        logger.info(f"Daily export completed. Sent {sent_count} listings to {chat_id}.")
+        logger.info(f"Export completed. Sent {sent_count} listings to {chat_id}.")
 
     def check_telegram_subscribers(self):
         """Polls for commands and subscribers."""
         self.update_offset = self.notifier.poll_updates_once(
             self.update_offset,
-            on_start_command=self.on_start_command
+            on_start_command=self.on_start_command,
+            on_reset_command=self.on_reset_command
         )
 
     def scan_source(self, scraper) -> List[Listing]:

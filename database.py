@@ -102,6 +102,13 @@ def mark_user_initial_received(chat_id: int):
         conn.execute("UPDATE subscribers SET has_received_initial = 1 WHERE chat_id = ?", (chat_id,))
         conn.commit()
 
+def reset_seen_listings():
+    """Clears seen listings history and resets subscriber initial export status, keeping favorites and subscriber list intact."""
+    with get_connection() as conn:
+        conn.execute("DELETE FROM seen_listings")
+        conn.execute("UPDATE subscribers SET has_received_initial = 0")
+        conn.commit()
+
 def get_subscribers() -> List[int]:
     with get_connection() as conn:
         cur = conn.cursor()
