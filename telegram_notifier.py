@@ -72,14 +72,10 @@ class TelegramNotifier:
         avail_escaped = html.escape(listing.availability or "")
 
         extra_lines = []
-        pet_smoke = []
         if pets_escaped != "Не указано":
-            pet_smoke.append(f"🐾 <b>Животные:</b> {pets_escaped}")
+            extra_lines.append(f"🐾 <b>Животные:</b> {pets_escaped}")
         if smoking_escaped:
-            pet_smoke.append(f"🚭 <b>Курение:</b> {smoking_escaped}")
-        if pet_smoke:
-            extra_lines.append(" | ".join(pet_smoke))
-
+            extra_lines.append(f"🚭 <b>Курение:</b> {smoking_escaped}")
         if avail_escaped:
             extra_lines.append(f"📅 <b>Заселение:</b> {avail_escaped}")
 
@@ -106,7 +102,8 @@ class TelegramNotifier:
             f"📮 <b>Адрес:</b> {address_escaped}\n"
             f"🏗️ <b>ЖК:</b> {complex_escaped}\n"
             f"🚗 <b>Паркинг:</b> {parking_escaped}\n"
-            f"❄️ <b>Кондиционер:</b> {ac_escaped} | 🌿 <b>Балкон:</b> {balcony_escaped}"
+            f"❄️ <b>Кондиционер:</b> {ac_escaped}\n"
+            f"🌿 <b>Балкон:</b> {balcony_escaped}"
             f"{extra_block}\n"
             f"💼 <b>Комиссия:</b> {commission_escaped}\n"
             f"🗺️ <b>Метка на карте:</b> <a href=\"{map_escaped}\">Google Maps</a>"
@@ -125,7 +122,8 @@ class TelegramNotifier:
                 f"📮 <b>Адрес:</b> {address_escaped}\n"
                 f"🏗️ <b>ЖК:</b> {complex_escaped}\n"
                 f"🚗 <b>Паркинг:</b> {parking_escaped}\n"
-                f"❄️ <b>Кондиционер:</b> {ac_escaped} | 🌿 <b>Балкон:</b> {balcony_escaped}"
+                f"❄️ <b>Кондиционер:</b> {ac_escaped}\n"
+                f"🌿 <b>Балкон:</b> {balcony_escaped}"
                 f"{extra_block}\n"
                 f"💼 <b>Комиссия:</b> {commission_escaped}\n"
                 f"🗺️ <b>Метка на карте:</b> <a href=\"{map_escaped}\">Google Maps</a>"
