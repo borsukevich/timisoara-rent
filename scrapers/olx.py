@@ -211,14 +211,26 @@ class OLXScraper(BaseScraper):
 
                 # Amenities & Owner status
                 has_boiler = self.check_boiler(full_text)
-                is_owner = self.check_owner(full_text) or not ad.get("isBusiness", True)
-                phone = self.extract_phone(full_text)
-                complex_name = self.detect_complex(full_text)
-                parking_info = self.analyze_parking(full_text)
-                ac_info = self.analyze_ac(full_text)
-                balcony_info = self.analyze_balcony(full_text)
-                deposit_info = self.analyze_deposit(full_text)
-                commission_info = "0% (Без комиссии)" if is_owner else "Уточнять (обычно 50%)"
+                is_business = bool(ad.get("isBusiness", True))
+                has_agency_in_text = any(k in full_text.lower() for k in [
+                    "agentie imobiliara", "agenție imobiliară", "agent imobiliar", "consultant imobiliar",
+                    "comision agentie", "comisionul agentiei", "comision standard"
+                ])
+
+                if is_business or has_agency_in_text:
+                    is_owner = False
+                else:
+                    is_owner = not is_business
+
+                has_zero_comm = self.check_zero_commission(full_text)
+                if has_zero_comm:
+                    commission_info = "0% (Без комиссии)"
+                elif is_owner:
+                    commission_info = "0% (Без комиссии)"
+                elif is_business or has_agency_in_text:
+                    commission_info = "Стандартная (обычно 50%)"
+                else:
+                    commission_info = "Уточнять (обычно 50%)"
                 pets_policy = self.analyze_pets(full_text)
                 availability = self.analyze_availability(full_text)
                 smoking_policy = self.analyze_smoking(full_text)

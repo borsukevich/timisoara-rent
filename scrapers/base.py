@@ -66,15 +66,57 @@ class BaseScraper:
         ]
         return any(k in t for k in keywords)
 
-    def check_owner(self, text: str) -> bool:
+    def check_zero_commission(self, text: str) -> bool:
+        """Strictly checks if 0% commission is explicitly stated."""
         if not text:
             return False
         t = text.lower()
-        keywords = [
-            "proprietar", "direct proprietar", "persoana fizica", "persoană fizică",
-            "fara comision", "fără comision", "comision 0", "comision 0%"
+        if any(neg in t for neg in [
+            "comision standard", "comision 50%", "comisionul agentiei", "comision agentie",
+            "comision de 50%", "plata comision"
+        ]):
+            return False
+
+        patterns = [
+            r'\bcomision\s*0\s*%',
+            r'\bcomision\s*0\b',
+            r'\b0\s*%\s*comision\b',
+            r'\bcomision\s*zero\b',
+            r'\bzero\s*comision\b',
+            r'\bf[aă]r[aă]\s+comision\b',
+            r'\bcomision\s+cump[aă]r[aă]tor\s+0\b',
+            r'\bcomision\s+chiria[sș]\s+0\b',
         ]
-        return any(k in t for k in keywords)
+        return any(re.search(p, t) for p in patterns)
+
+    def check_owner(self, text: str) -> bool:
+        """Strictly checks if the author explicitly identifies as the direct private owner."""
+        if not text:
+            return False
+        t = text.lower()
+
+        # If it explicitly mentions being an agency or broker, it's NOT direct owner
+        agency_indicators = [
+            "agentie imobiliara", "agenție imobiliară", "agent imobiliar", "consultant imobiliar",
+            "birou imobiliar", "comision agentie", "comisionul agentiei", "comision standard",
+            "comision 50%", "la cererea proprietarului", "acordul proprietarului",
+            "in numele proprietarului", "în numele proprietarului", "reprezentam proprietarul",
+            "reprezentăm proprietarul", "amenajat de proprietar", "locuit de proprietar",
+            "proprietari civilizati", "proprietarul doreste", "proprietarul își rezervă"
+        ]
+        if any(a in t for a in agency_indicators):
+            return False
+
+        owner_patterns = [
+            r'\bdirect\s+(?:de\s+la\s+)?proprietar\b',
+            r'\bproprietar\s*,\s*(?:dau|ofer|inchiriez|închiriez|propun)\b',
+            r'\bpersoan[aă]\s+fizic[aă]\s*,\s*(?:dau|ofer|inchiriez|închiriez)\b',
+            r'\banun[tț]\s+postat\s+de\s+proprietar\b',
+            r'\b[iî]nchiriez\s+ca\s+proprietar\b',
+            r'\bsunt\s+proprietar\b',
+            r'\bproprietar\s+unic\b',
+        ]
+        return any(re.search(p, t) for p in owner_patterns)
 
     def analyze_parking(self, text: str) -> str:
         if not text:

@@ -103,10 +103,31 @@ class ImobiliareScraper(BaseScraper):
                 desc_div = card.select_one('.text-body-sm')
                 card_desc = desc_div.get_text(strip=True) if desc_div else ""
 
-                affiliation = card.get("data-affiliation", "").upper()
-                is_owner = (affiliation == "PROPRIETAR") or "comision 0%" in card.get_text().lower() or self.check_owner(card.get_text())
-
                 card_text = card.get_text(" | ", strip=True)
+                affiliation = card.get("data-affiliation", "").upper()
+                has_agency = bool(
+                    affiliation == "AGENTIE"
+                    or card.find("a", href=lambda h: h and "/agentie/" in h)
+                    or any(k in card_text.lower() for k in ["agentie", "agenție", "consultant imobiliar", "broker", "real estate"])
+                )
+
+                if has_agency:
+                    is_owner = False
+                elif affiliation == "PROPRIETAR":
+                    is_owner = True
+                else:
+                    is_owner = self.check_owner(card_text)
+
+                has_zero_comm = self.check_zero_commission(card_text)
+                if has_zero_comm:
+                    commission_info = "0% (Без комиссии)"
+                elif is_owner:
+                    commission_info = "0% (Без комиссии)"
+                elif has_agency:
+                    commission_info = "Стандартная (обычно 50%)"
+                else:
+                    commission_info = "Уточнять (обычно 50%)"
+
                 full_text = f"{title} {card_desc} {card_text}"
                 has_boiler = self.check_boiler(full_text)
                 phone = self.extract_phone(full_text)
@@ -117,7 +138,6 @@ class ImobiliareScraper(BaseScraper):
                 balcony_info = self.analyze_balcony(full_text)
                 deposit_info = self.analyze_deposit(full_text)
                 building_type = self.analyze_building_type(full_text)
-                commission_info = "0% (Без комиссии)" if is_owner else "Уточнять (обычно 50%)"
 
                 listings.append(Listing(
                     uid=f"imob_{card_id}",
@@ -204,8 +224,32 @@ class ImobiliareScraper(BaseScraper):
                     listing.build_year = build_year
                     listing.building_type = f"{listing.building_type} | Дом {build_year} года" if listing.building_type != "Обычный дом" else f"Дом {build_year} года"
 
-                listing.has_boiler = self.check_boiler(content_text)
-                listing.is_owner = self.check_owner(content_text) or listing.is_owner
+                # Check for agency presence on the detailed page
+                has_agency_on_page = bool(
+                    soup.find("a", href=lambda h: h and "/agentie/" in h)
+                    or soup.find(class_=lambda c: c and any(k in str(c).lower() for k in ["agent-contact", "consultant-imobiliar", "agency"]))
+                    or any(k in content_text.lower() for k in ["consultant imobiliar", "agent imobiliar", "agentie imobiliara", "agenție imobiliară", "comision standard"])
+                )
+
+                if has_agency_on_page:
+                    listing.is_owner = False
+                elif not listing.is_owner:
+                    listing.is_owner = self.check_owner(content_text)
+
+                # Commission check
+                is_explicit_zero = self.check_zero_commission(content_text)
+                is_standard = "comision standard" in content_text.lower() or bool(
+                    soup.find(string=lambda s: s and "comision" in str(s).lower() and "standard" in str(s).lower())
+                )
+
+                if is_explicit_zero:
+                    listing.commission_info = "0% (Без комиссии)"
+                elif listing.is_owner:
+                    listing.commission_info = "0% (Без комиссии)"
+                elif is_standard or has_agency_on_page:
+                    listing.commission_info = "Стандартная (обычно 50%)"
+                else:
+                    listing.commission_info = "Уточнять (обычно 50%)"
 
                 complex_cand = self.detect_complex(content_text)
                 if complex_cand != "Не указан":

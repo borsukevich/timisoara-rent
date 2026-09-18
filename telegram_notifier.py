@@ -86,6 +86,8 @@ class TelegramNotifier:
         badges = []
         if listing.is_owner:
             badges.append("👤 <b>ОТ СОБСТВЕННИКА (Proprietar / 0% comision)</b>")
+        elif listing.commission_info and ("без комиссии" in listing.commission_info.lower() or listing.commission_info.startswith("0%")):
+            badges.append("💼 <b>0% КОМИССИЯ (Fără comision de la chiriaș)</b>")
         if listing.has_boiler:
             badges.append("🔥 <b>Свой котёл (Centrală proprie / gaz)</b>")
 

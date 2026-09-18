@@ -161,7 +161,22 @@ class Publi24Scraper(BaseScraper):
 
                 full_text = f"{title} {item_text}"
                 has_boiler = self.check_boiler(full_text)
-                is_owner = self.check_owner(full_text)
+                has_agency = any(k in full_text.lower() for k in [
+                    "agentie imobiliara", "agenție imobiliară", "agent imobiliar", "consultant imobiliar",
+                    "comision agentie", "comision standard"
+                ])
+                is_owner = not has_agency and self.check_owner(full_text)
+                has_zero_comm = self.check_zero_commission(full_text)
+
+                if has_zero_comm:
+                    commission_info = "0% (Без комиссии)"
+                elif is_owner:
+                    commission_info = "0% (Без комиссии)"
+                elif has_agency:
+                    commission_info = "Стандартная (обычно 50%)"
+                else:
+                    commission_info = "Уточнять (обычно 50%)"
+
                 phone = self.extract_phone(full_text)
                 complex_name = self.detect_complex(full_text)
                 parking_info = self.analyze_parking(full_text)
@@ -169,7 +184,6 @@ class Publi24Scraper(BaseScraper):
                 balcony_info = self.analyze_balcony(full_text)
                 deposit_info = self.analyze_deposit(full_text)
                 building_type = self.analyze_building_type(full_text)
-                commission_info = "0% (Без комиссии)" if is_owner else "Уточнять (обычно 50%)"
 
                 listings.append(Listing(
                     uid=f"publi_{ad_id}",
@@ -301,10 +315,27 @@ class Publi24Scraper(BaseScraper):
                 if parsed_year:
                     listing.build_year = parsed_year
                     listing.building_type = f"{listing.building_type} | Дом {parsed_year} года" if listing.building_type != "Обычный фонд" else f"Дом {parsed_year} года"
-            if not listing.has_boiler:
-                listing.has_boiler = self.check_boiler(page_text)
-            listing.is_owner = self.check_owner(page_text) or listing.is_owner
-            listing.commission_info = "0% (Без комиссии)" if listing.is_owner else "Уточнять (обычно 50%)"
+            tip_anunt = specs.get("tip anunt", "").lower()
+            has_agency = "agentie" in tip_anunt or "agenție" in tip_anunt or any(k in page_text.lower() for k in [
+                "agentie imobiliara", "agenție imobiliară", "agent imobiliar", "consultant imobiliar",
+                "comision agentie", "comision standard"
+            ])
+            if has_agency:
+                listing.is_owner = False
+            elif "particular" in tip_anunt:
+                listing.is_owner = True
+            elif not listing.is_owner:
+                listing.is_owner = self.check_owner(page_text)
+
+            has_zero_comm = self.check_zero_commission(page_text)
+            if has_zero_comm:
+                listing.commission_info = "0% (Без комиссии)"
+            elif listing.is_owner:
+                listing.commission_info = "0% (Без комиссии)"
+            elif has_agency:
+                listing.commission_info = "Стандартная (обычно 50%)"
+            else:
+                listing.commission_info = "Уточнять (обычно 50%)"
 
             complex_cand = self.detect_complex(page_text)
             if complex_cand != "Не указан":

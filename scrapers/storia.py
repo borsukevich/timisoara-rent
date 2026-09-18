@@ -106,19 +106,28 @@ class StoriaScraper(BaseScraper):
                 # Analysis
                 full_text = f"{title} {desc}"
                 has_boiler = self.check_boiler(full_text)
-                is_owner = bool(item.get("isPrivateOwner", False)) or self.check_owner(full_text)
-                phone = self.extract_phone(full_text)
-
-                dev_title = item.get("developmentTitle") or ""
-                complex_name = dev_title.strip() if dev_title.strip() else self.detect_complex(full_text)
                 
-                parking_info = self.analyze_parking(full_text)
-                pets_policy = self.analyze_pets(full_text)
-                ac_info = self.analyze_ac(full_text)
-                balcony_info = self.analyze_balcony(full_text)
-                deposit_info = self.analyze_deposit(full_text)
-                building_type = self.analyze_building_type(full_text)
-                commission_info = "0% (Без комиссии)" if is_owner else "Уточнять (обычно 50%)"
+                is_private = bool(item.get("isPrivateOwner", False)) or item.get("advertiserType") == "private"
+                has_agency = bool(item.get("agency") or item.get("advertiserType") == "agency" or any(k in full_text.lower() for k in [
+                    "agentie imobiliara", "agenție imobiliară", "agent imobiliar", "consultant imobiliar", "comision agentie", "comision standard"
+                ]))
+
+                if has_agency:
+                    is_owner = False
+                elif is_private:
+                    is_owner = True
+                else:
+                    is_owner = self.check_owner(full_text)
+
+                has_zero_comm = self.check_zero_commission(full_text)
+                if has_zero_comm:
+                    commission_info = "0% (Без комиссии)"
+                elif is_owner:
+                    commission_info = "0% (Без комиссии)"
+                elif has_agency:
+                    commission_info = "Стандартная (обычно 50%)"
+                else:
+                    commission_info = "Уточнять (обычно 50%)"
 
                 listings.append(Listing(
                     uid=f"storia_{slug}" if slug else f"storia_{ad_id}",
@@ -233,7 +242,27 @@ class StoriaScraper(BaseScraper):
                     full_text = f"{listing.title} {listing.description}"
                     if not listing.has_boiler:
                         listing.has_boiler = self.check_boiler(full_text)
-                    listing.is_owner = bool(ad.get("isPrivateOwner", False)) or self.check_owner(full_text) or listing.is_owner
+                    has_agency = bool(ad.get("agency") or ad.get("advertiserType") == "agency" or any(k in full_text.lower() for k in [
+                        "agentie imobiliara", "agenție imobiliară", "agent imobiliar", "consultant imobiliar", "comision agentie", "comision standard"
+                    ]))
+                    is_private = bool(ad.get("isPrivateOwner", False)) or ad.get("advertiserType") == "private"
+
+                    if has_agency:
+                        listing.is_owner = False
+                    elif is_private:
+                        listing.is_owner = True
+                    elif not listing.is_owner:
+                        listing.is_owner = self.check_owner(full_text)
+
+                    has_zero_comm = self.check_zero_commission(full_text)
+                    if has_zero_comm:
+                        listing.commission_info = "0% (Без комиссии)"
+                    elif listing.is_owner:
+                        listing.commission_info = "0% (Без комиссии)"
+                    elif has_agency:
+                        listing.commission_info = "Стандартная (обычно 50%)"
+                    else:
+                        listing.commission_info = "Уточнять (обычно 50%)"
 
                     complex_cand = self.detect_complex(full_text)
                     if complex_cand != "Не указан":
