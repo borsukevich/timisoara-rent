@@ -1,4 +1,6 @@
+import sys
 import time
+import threading
 import logging
 from typing import List
 
@@ -16,7 +18,8 @@ from telegram_notifier import TelegramNotifier
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
+    datefmt="%Y-%m-%d %H:%M:%S",
+    stream=sys.stdout
 )
 logger = logging.getLogger("TimisoaraRent")
 
@@ -80,7 +83,7 @@ class RentalScannerService:
             "⏳ <i>Это займет около 1–2 минут (отправляю порциями, чтобы не сработал спам-фильтр Telegram)...</i>"
         )
         self.notifier.send_text_message(chat_id, intro_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
-        self.run_export(chat_id)
+        threading.Thread(target=self.run_export, args=(chat_id,), daemon=True, name="ExportThread").start()
 
     def on_reset_command(self, chat_id: int):
         """When user sends /reset or taps '🔄 Перезапустить поиск': clear seen history and run fresh export."""
@@ -98,71 +101,75 @@ class RentalScannerService:
             "⏳ <i>Пожалуйста, подождите 1–2 минуты...</i>"
         )
         self.notifier.send_text_message(chat_id, reset_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
-        self.run_export(chat_id)
+        threading.Thread(target=self.run_export, args=(chat_id,), daemon=True, name="ExportThread").start()
 
     def run_export(self, chat_id: int):
         self.is_exporting_initial = True
         logger.info(f"Starting export for user {chat_id}...")
 
         sent_count = 0
-        for scraper in self.scrapers:
-            try:
-                listings = scraper.fetch_listings()
-                organic_items = [l for l in listings if not l.is_promoted]
-                top_items = organic_items[:30]
-                logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for {chat_id}...")
+        try:
+            for scraper in self.scrapers:
+                try:
+                    listings = scraper.fetch_listings()
+                    organic_items = [l for l in listings if not l.is_promoted]
+                    top_items = organic_items[:30]
+                    logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for {chat_id}...")
 
-                for listing in reversed(top_items):
-                    price_eur = scraper.parse_price_eur(listing.price)
-                    if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
-                        continue
-
-                    if hasattr(scraper, "enrich_listing_details"):
-                        enriched = scraper.enrich_listing_details(listing)
-                        if not enriched:
+                    for listing in reversed(top_items):
+                        price_eur = scraper.parse_price_eur(listing.price)
+                        if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
                             continue
-                        listing = enriched
 
-                    ok = self.notifier.send_listing(chat_id, listing)
-                    if ok:
-                        sent_count += 1
+                        if hasattr(scraper, "enrich_listing_details"):
+                            enriched = scraper.enrich_listing_details(listing)
+                            if not enriched:
+                                continue
+                            listing = enriched
+
+                        ok = self.notifier.send_listing(chat_id, listing)
+                        if ok:
+                            sent_count += 1
+                            database.mark_listing_seen(
+                                uid=listing.uid,
+                                source=listing.source,
+                                title=listing.title,
+                                price=listing.price,
+                                url=listing.url,
+                                sent=1
+                            )
+                        # Safe interval between apartments
+                        time.sleep(1.0)
+
+                    # Mark remaining existing organic items from page 1 as seen
+                    # so they will not be treated as "new" in subsequent scans
+                    for listing in organic_items[30:]:
                         database.mark_listing_seen(
                             uid=listing.uid,
                             source=listing.source,
                             title=listing.title,
                             price=listing.price,
                             url=listing.url,
-                            sent=1
+                            sent=0
                         )
-                    # Safe interval between apartments
-                    time.sleep(1.0)
+                except Exception as e:
+                    logger.error(f"Error during export for {scraper.name}: {e}", exc_info=True)
 
-                # Mark remaining existing organic items from page 1 as seen
-                # so they will not be treated as "new" in subsequent scans
-                for listing in organic_items[20:]:
-                    database.mark_listing_seen(
-                        uid=listing.uid,
-                        source=listing.source,
-                        title=listing.title,
-                        price=listing.price,
-                        url=listing.url,
-                        sent=0
-                    )
-            except Exception as e:
-                logger.error(f"Error during export for {scraper.name}: {e}")
+            # Mark user as having received the initial batch
+            database.mark_user_initial_received(chat_id)
 
-        # Mark user as having received the initial batch
-        database.mark_user_initial_received(chat_id)
-
-        finish_msg = (
-            f"✅ <b>Выгрузка за сегодня завершена!</b>\n"
-            f"Отправлено актуальных вариантов: <b>{sent_count}</b>.\n\n"
-            f"📡 <b>Мониторинг активен:</b> теперь каждые 3 минуты бот проверяет все площадки и будет "
-            f"присылать только свежие варианты сразу после их публикации!"
-        )
-        self.notifier.send_text_message(chat_id, finish_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
-        self.is_exporting_initial = False
-        logger.info(f"Export completed. Sent {sent_count} listings to {chat_id}.")
+            finish_msg = (
+                f"✅ <b>Выгрузка за сегодня завершена!</b>\n"
+                f"Отправлено актуальных вариантов: <b>{sent_count}</b>.\n\n"
+                f"📡 <b>Мониторинг активен:</b> теперь каждые 3 минуты бот проверяет все площадки и будет "
+                f"присылать только свежие варианты сразу после их публикации!"
+            )
+            self.notifier.send_text_message(chat_id, finish_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
+            logger.info(f"Export completed. Sent {sent_count} listings to {chat_id}.")
+        except Exception as e:
+            logger.error(f"Critical error in run_export: {e}", exc_info=True)
+        finally:
+            self.is_exporting_initial = False
 
     def check_telegram_subscribers(self):
         """Polls for commands and subscribers."""

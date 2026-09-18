@@ -1,11 +1,15 @@
 import html
 import time
+import sys
+import logging
 from typing import List
 from curl_cffi import requests
 from scrapers.base import Listing
 from config import TELEGRAM_BOT_TOKEN
 from translator import translate_to_russian
 import database
+
+logger = logging.getLogger("TelegramNotifier")
 
 class TelegramNotifier:
     REPLY_KEYBOARD = {
@@ -316,6 +320,8 @@ class TelegramNotifier:
             return False
 
     def send_favorites_list(self, chat_id: int):
+        logger.info(f"[Telegram] Sending favorites list to {chat_id}...")
+        sys.stdout.flush()
         favs = database.get_favorites(chat_id)
         if not favs:
             msg = (
@@ -359,6 +365,8 @@ class TelegramNotifier:
             time.sleep(0.3)
 
     def send_stats(self, chat_id: int):
+        logger.info(f"[Telegram] Sending stats to {chat_id}...")
+        sys.stdout.flush()
         stats = database.get_stats()
         fav_count = len(database.get_favorites(chat_id))
         by_src = stats.get("by_source", {})
@@ -397,6 +405,8 @@ class TelegramNotifier:
                     cq_data = cq.get("data", "")
                     msg = cq.get("message", {})
                     msg_id = msg.get("message_id")
+                    logger.info(f"[Telegram] Callback query from {user_chat_id}: {cq_data}")
+                    sys.stdout.flush()
 
                     if cq_data.startswith("fav:"):
                         uid = cq_data.split(":", 1)[1]
@@ -434,8 +444,12 @@ class TelegramNotifier:
 
                 if chat_id:
                     database.add_subscriber(chat_id, username, first_name)
-                    if text.startswith("/start"):
-                        print(f"[Telegram] /start received from: {chat_id} (@{username})")
+                    logger.info(f"[Telegram] Incoming text from {chat_id} (@{username}): '{text}'")
+                    sys.stdout.flush()
+
+                    t_lower = text.lower().strip()
+                    if t_lower.startswith("/start"):
+                        logger.info(f"[Telegram] /start triggered by {chat_id} (@{username})")
                         if on_start_command:
                             on_start_command(chat_id)
                         else:
@@ -444,8 +458,12 @@ class TelegramNotifier:
                                 "✅ <b>Мониторинг активен!</b> Бот проверяет площадки каждые 3 минуты.",
                                 reply_markup=self.REPLY_KEYBOARD
                             )
-                    elif text.startswith("/reset") or text.startswith("/restart") or "перезапуск" in text.lower():
-                        print(f"[Telegram] /reset received from: {chat_id} (@{username})")
+                    elif (
+                        t_lower.startswith("/reset")
+                        or t_lower.startswith("/restart")
+                        or any(k in t_lower for k in ["перезапуск", "сброс", "заново", "рестарт", "restart", "reset", "обнови"])
+                    ):
+                        logger.info(f"[Telegram] /reset triggered by {chat_id} (@{username}) with text: '{text}'")
                         if on_reset_command:
                             on_reset_command(chat_id)
                         else:
@@ -455,12 +473,24 @@ class TelegramNotifier:
                                 "🔄 <b>База поиска сброшена!</b> Отправьте /start для запуска новой выгрузки.",
                                 reply_markup=self.REPLY_KEYBOARD
                             )
-                    elif text.startswith("/favorites") or text.startswith("/fav") or "избранн" in text.lower():
+                    elif t_lower.startswith("/favorites") or t_lower.startswith("/fav") or "избранн" in t_lower:
+                        logger.info(f"[Telegram] Favorites triggered by {chat_id} (@{username})")
                         self.send_favorites_list(chat_id)
-                    elif text.startswith("/stats") or "статистик" in text.lower():
+                    elif t_lower.startswith("/stats") or "статистик" in t_lower:
+                        logger.info(f"[Telegram] Stats triggered by {chat_id} (@{username})")
                         self.send_stats(chat_id)
+                    else:
+                        logger.info(f"[Telegram] Unrecognized command from {chat_id} (@{username}): '{text}'")
+                        self.send_text_message(
+                            chat_id,
+                            "🤖 <b>Команда не распознана.</b>\n\n"
+                            "Пожалуйста, выберите действие с помощью кнопок меню внизу 👇",
+                            reply_markup=self.REPLY_KEYBOARD
+                        )
+                    sys.stdout.flush()
 
             return offset
         except Exception as e:
-            print(f"[Telegram] Error polling updates: {e}")
+            logger.error(f"[Telegram] Error polling updates: {e}", exc_info=True)
+            sys.stdout.flush()
             return offset

@@ -105,7 +105,17 @@ class StoriaScraper(BaseScraper):
 
                 # Analysis
                 full_text = f"{title} {desc}"
+                phone = self.extract_phone(full_text)
                 has_boiler = self.check_boiler(full_text)
+                complex_name = self.detect_complex(full_text)
+                parking_info = self.analyze_parking(full_text)
+                pets_policy = self.analyze_pets(full_text)
+                ac_info = self.analyze_ac(full_text)
+                balcony_info = self.analyze_balcony(full_text)
+                deposit_info = self.analyze_deposit(full_text)
+                building_type = self.analyze_building_type(full_text)
+                smoking_policy = self.analyze_smoking(full_text)
+                availability = self.analyze_availability(full_text)
                 
                 is_private = bool(item.get("isPrivateOwner", False)) or item.get("advertiserType") == "private"
                 has_agency = bool(item.get("agency") or item.get("advertiserType") == "agency" or any(k in full_text.lower() for k in [
