@@ -1,7 +1,8 @@
 from curl_cffi import requests
 from bs4 import BeautifulSoup
 import re
-from typing import List
+import json
+from typing import List, Optional
 from scrapers.base import BaseScraper, Listing
 
 class ImobiliareScraper(BaseScraper):
@@ -17,7 +18,7 @@ class ImobiliareScraper(BaseScraper):
                 return []
 
             soup = BeautifulSoup(r.text, "html.parser")
-            cards = soup.select('[data-id]')
+            cards = soup.select("[data-id]")
 
             for card in cards:
                 card_id = card.get("data-id")
@@ -30,8 +31,12 @@ class ImobiliareScraper(BaseScraper):
                 href = link_el.get("href", "")
                 url = f"https://www.imobiliare.ro{href}" if href.startswith("/") else href
 
-                title_el = card.find(["h2", "h3"]) or link_el
-                title = title_el.get_text(strip=True) if title_el else "Apartament Timișoara"
+                # Title: prefer aria-label which has full descriptive text (e.g. "Apartament 3 camere de inchiriat, Centrala Proprie...")
+                aria_label = link_el.get("aria-label", "").strip()
+                data_name = card.get("data-name", "").strip()
+                title_el = card.find(["h2", "h3"])
+                title_text = title_el.get_text(strip=True) if title_el else ""
+                title = aria_label or data_name or title_text or "Apartament Timișoara"
 
                 classes = " ".join(card.get("class", []))
                 is_promoted = "promovat" in classes.lower() or bool(card.select('.promovat, [class*="promovat"]'))
@@ -40,51 +45,70 @@ class ImobiliareScraper(BaseScraper):
                 p_el = card.select_one('.posted-at, [class*="posted-at"]')
                 posted_at = p_el.get_text(strip=True) if p_el else ""
                 is_fresh = bool(posted_at and any(k in posted_at.lower() for k in ["azi", "ore", "acum"]))
-                if not is_fresh:
-                    is_promoted = True
 
-                # Price
-                price = ""
-                price_match = re.search(r'(\d+[\s.]?\d*)\s*€', card.get_text())
-                if price_match:
-                    price = f"{price_match.group(1).replace(' ', '')} €"
+                # Price: prefer data-item-price
+                data_price = card.get("data-item-price")
+                if data_price and data_price.isdigit():
+                    price = f"{data_price} €"
+                else:
+                    price_match = re.search(r'(\d+[\s.]?\d*)\s*€', card.get_text())
+                    price = f"{price_match.group(1).replace(' ', '')} €" if price_match else ""
+
+                # Price filter: strictly 400 - 800 EUR
+                price_eur = self.parse_price_eur(price)
+                if price_eur is not None and (price_eur < 400 or price_eur > 800):
+                    continue
 
                 # Rooms and area
                 rooms = "3 camere"
-                exact_area = "от 55 м²"
-                rooms_match = re.search(r'(\d+)\s*camere', card.get_text(), re.IGNORECASE)
-                if rooms_match:
-                    rooms = f"{rooms_match.group(1)} camere"
-                
-                area_match = re.search(r'(\d+[\s.,]?\d*)\s*mp', card.get_text(), re.IGNORECASE)
-                if area_match:
-                    exact_area = f"{area_match.group(1).strip()} м²"
+                cat3 = card.get("data-category3", "")
+                if "bedroom" in cat3:
+                    m_bed = re.search(r'(\d+)', cat3)
+                    if m_bed:
+                        rooms = f"{m_bed.group(1)} camere"
 
-                # Floor
-                card_text = card.get_text(" | ", strip=True)
-                floor_match = re.search(r'(Etaj\s*\d+(?:\s*/\s*\d+)?|Parter|Demisol|Mansarda)', card_text, re.IGNORECASE)
-                floor = self.format_floor(floor_match.group(1)) if floor_match else "Не указан"
+                data_surface = card.get("data-surface")
+                if data_surface and data_surface.isdigit():
+                    exact_area = f"{data_surface} м²"
+                else:
+                    area_match = re.search(r'(\d+[\s.,]?\d*)\s*mp', card.get_text(), re.IGNORECASE)
+                    exact_area = f"{area_match.group(1).strip()} м²" if area_match else "от 55 м²"
 
-                # Location & Address
-                district = "Timișoara"
-                loc_match = re.search(r'([A-Za-zĂÎÂȘȚăîâșț\s-]+),\s*Timișoara', card_text)
-                if loc_match:
-                    district = loc_match.group(1).strip()
+                # Floor: check card-floor_number or regex
+                floor_attr = card.select_one('[data-cy="card-floor_number"]')
+                if floor_attr:
+                    floor_txt = floor_attr.get_text(strip=True)
+                else:
+                    floor_match = re.search(r'(Etaj\s*\d+(?:\s*/\s*\d+)?|Parter|Demisol|Mansarda)', card.get_text(), re.IGNORECASE)
+                    floor_txt = floor_match.group(1) if floor_match else "Не указан"
+                floor = self.format_floor(floor_txt)
+
+                # Location & District
+                district = card.get("data-area") or "Timișoara"
+                if not district or district == "Timisoara":
+                    loc_match = re.search(r'([A-Za-zĂÎÂȘȚăîâșț\s-]+),\s*Timișoara', card.get_text())
+                    if loc_match:
+                        district = loc_match.group(1).strip()
                 full_address = f"{district}, Timișoara" if district != "Timișoara" else "Timișoara"
-
                 map_link = self.generate_map_link(address=full_address)
 
-                # Photos
+                # Photos from gallery inside card
                 photos = []
                 for img in card.find_all("img"):
                     src = img.get("src") or img.get("data-src")
                     if src and "roamcdn.net" in src and src not in photos:
                         photos.append(src)
 
-                # Analysis
-                full_text = f"{title} {card_text}"
+                # Description snippet in card
+                desc_div = card.select_one('.text-body-sm')
+                card_desc = desc_div.get_text(strip=True) if desc_div else ""
+
+                affiliation = card.get("data-affiliation", "").upper()
+                is_owner = (affiliation == "PROPRIETAR") or "comision 0%" in card.get_text().lower() or self.check_owner(card.get_text())
+
+                card_text = card.get_text(" | ", strip=True)
+                full_text = f"{title} {card_desc} {card_text}"
                 has_boiler = self.check_boiler(full_text)
-                is_owner = self.check_owner(full_text)
                 phone = self.extract_phone(full_text)
                 complex_name = self.detect_complex(full_text)
                 parking_info = self.analyze_parking(full_text)
@@ -116,7 +140,7 @@ class ImobiliareScraper(BaseScraper):
                     commission_info=commission_info,
                     building_type=building_type,
                     map_link=map_link,
-                    description=card_text[:500],
+                    description=card_desc if card_desc else title,
                     photos=photos,
                     phone=phone,
                     is_promoted=is_promoted,
@@ -130,3 +154,90 @@ class ImobiliareScraper(BaseScraper):
             print(f"[Imobiliare] Exception while fetching: {e}")
 
         return listings
+
+    def enrich_listing_details(self, listing: Listing) -> Optional[Listing]:
+        """Fetches the full offer page on Imobiliare to extract complete description, boiler, phone, etc."""
+        try:
+            r = requests.get(listing.url, impersonate="chrome124", timeout=10)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "html.parser")
+
+                # 1. Full description from schema.org / Product
+                full_desc = ""
+                for s in soup.find_all("script", type="application/ld+json"):
+                    try:
+                        data = json.loads(s.string)
+                        for it in data.get("@graph", []):
+                            if it.get("@type") == "Product" and "description" in it:
+                                full_desc = it["description"].strip()
+                                break
+                    except Exception:
+                        pass
+                if full_desc:
+                    listing.description = full_desc
+
+                # 2. Extract characteristics block text
+                chars_text = ""
+                chars_section = soup.find(id=lambda x: x and "caracteristici" in x)
+                if chars_section:
+                    chars_text = chars_section.get_text(" ", strip=True)
+
+                # 3. Floor update if page has exact Etaj X/Y or Etaj X
+                m_fl = re.search(r'etaj(?:ul)?[:\s]+(\d+)(?:\s*/\s*(\d+))?', f"{listing.description} {chars_text}", re.IGNORECASE)
+                if m_fl:
+                    cur = m_fl.group(1)
+                    tot = m_fl.group(2)
+                    listing.floor = f"{cur} из {tot} этаж" if tot else f"{cur} этаж"
+
+                # 4. Extract phone numbers strictly from text description or specs (avoid SVG/HTML code)
+                desc_and_chars = f"{listing.description} {chars_text}"
+                phones = re.findall(r'\b(?:(?:\+40|0040|0)7[0-9]{8}|(?:\+40|0)7[0-9]{2}[\s\.-][0-9]{3}[\s\.-][0-9]{3})\b', desc_and_chars)
+                if phones:
+                    listing.phone = self.extract_phone(phones[0])
+
+                # 5. Analyze features strictly from listing content (title + description + specs)
+                content_text = f"{listing.title} {listing.description} {chars_text}"
+
+                # Building year filter: if year is found and < 2010, exclude
+                build_year = self.extract_build_year(content_text)
+                if build_year:
+                    listing.build_year = build_year
+                    if build_year < 2010:
+                        listing.exclusion_reason = f"Год постройки {build_year} (< 2010)"
+                        return None
+                    listing.building_type = f"{listing.building_type} | Дом {build_year} года" if listing.building_type != "Обычный дом" else f"Дом {build_year} года"
+
+                listing.has_boiler = self.check_boiler(content_text)
+                listing.is_owner = self.check_owner(content_text) or listing.is_owner
+
+                complex_cand = self.detect_complex(content_text)
+                if complex_cand != "Не указан":
+                    listing.complex_name = complex_cand
+
+                parking_cand = self.analyze_parking(content_text)
+                if parking_cand != "Не указано":
+                    listing.parking_info = parking_cand
+
+                # Exact street address extraction
+                street = self.extract_street_address(content_text)
+                if street:
+                    listing.street = street
+                    if listing.district and listing.district != "Timișoara":
+                        listing.full_address = f"{street}, {listing.district}, Timișoara"
+                    else:
+                        listing.full_address = f"{street}, Timișoara"
+                    listing.map_link = self.generate_map_link(address=listing.full_address)
+
+                # Pets, Availability, Smoking
+                listing.pets_policy = self.analyze_pets(content_text)
+                listing.availability = self.analyze_availability(content_text)
+                listing.smoking_policy = self.analyze_smoking(content_text)
+
+                listing.ac_info = self.analyze_ac(content_text)
+                listing.balcony_info = self.analyze_balcony(content_text)
+                listing.deposit_info = self.analyze_deposit(content_text)
+                if not build_year:
+                    listing.building_type = self.analyze_building_type(content_text)
+        except Exception as e:
+            print(f"[Imobiliare] Error enriching {listing.url}: {e}")
+        return listing

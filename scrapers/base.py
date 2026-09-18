@@ -32,6 +32,10 @@ class Listing:
     is_promoted: bool = False
     is_owner: bool = False
     has_boiler: bool = False
+    build_year: Optional[int] = None
+    availability: str = ""
+    smoking_policy: str = ""
+    exclusion_reason: Optional[str] = None
     date_text: Optional[str] = None
     is_today: bool = True
 
@@ -107,11 +111,34 @@ class BaseScraper:
         if not text:
             return "Не указано"
         t = text.lower()
-        if any(k in t for k in ["nu se accepta animale", "nu se acceptă animale", "fara animale", "fără animale", "fara pet"]):
+        if any(k in t for k in ["nu se accepta animale", "nu se acceptă animale", "fara animale", "fără animale", "fara pet", "nu sunt acceptate animale"]):
             return "❌ Запрещены"
-        if any(k in t for k in ["accepta animale", "acceptă animale", "pet friendly", "animale permise"]):
+        if any(k in t for k in ["animale mici", "animale de talie mica", "animale de talie mică"]):
+            return "✅ Разрешены (небольшие)"
+        if any(k in t for k in ["accepta animale", "acceptă animale", "acceptate animale", "sunt acceptate animale", "pet friendly", "animale permise", "animale de companie acceptate", "permis cu animale"]):
             return "✅ Разрешены"
         return "Не указано"
+
+    def analyze_availability(self, text: str) -> str:
+        if not text:
+            return ""
+        t = text.lower()
+        if any(k in t for k in ["disponibil imediat", "disponibil de acum", "ocupabil imediat", "disponibilitate imediata", "liber imediat"]):
+            return "Сразу (свободна)"
+        m = re.search(r'disponibil(?:[aă])?\s+(?:de\s+la|din)?\s*([0-9]{1,2}\s+[a-zăîâșț]+(?:\s+[0-9]{4})?|[0-9]{1,2}[./-][0-9]{1,2}(?:[./-][0-9]{2,4})?)', t)
+        if m:
+            return f"С {m.group(1).strip()}"
+        return ""
+
+    def analyze_smoking(self, text: str) -> str:
+        if not text:
+            return ""
+        t = text.lower()
+        if any(k in t for k in ["fumatul este permis doar afara", "fumatul permis doar afara", "doar afara", "doar afară", "pe balcon", "numai pe balcon"]):
+            return "🚬 Только на улице/балконе"
+        if any(k in t for k in ["fumatul interzis", "nu se fumeaza", "nu se fumează", "fara fumat", "fără fumat"]):
+            return "🚭 В квартире запрещено"
+        return ""
 
     def analyze_ac(self, text: str) -> str:
         if not text:
@@ -239,16 +266,67 @@ class BaseScraper:
         clean = re.sub(r'\s+', ' ', clean).strip()
         return clean
 
-    def is_invalid_rooms(self, text: str) -> bool:
-        """Returns True if title/text explicitly indicates only 1 or 2 rooms / studio / garsoniera."""
+    def extract_build_year(self, text: str) -> Optional[int]:
         if not text:
-            return False
-        t = text.lower()
-        if any(w in t for w in ["3 camere", "3-camere", "trei camere", "4 camere", "4-camere", "patru camere", "5 camere"]):
-            return False
-        if re.search(r'\b(?:1|2)\s*camer[ea]\b|\b(?:o|doua|două)\s*camere\b|\bgarsonier[aă]\b|\bstudio\b', t):
-            return True
-        return False
+            return None
+        m = re.search(r'(?:anul\s+construc[tț]iei|an\s+construc[tț]ie|an\s+de\s+construc[tț]ie|const[ru]+it\s+(?:în|in)(?:\s+anul)?|bloc\s+(?:nou\s+)?din)\s*[:\s-]+(\d{4})', text, re.IGNORECASE)
+        if m:
+            try:
+                year = int(m.group(1))
+                if 1900 <= year <= 2030:
+                    return year
+            except Exception:
+                pass
+        return None
+
+    def extract_street_address(self, text: str) -> Optional[str]:
+        if not text:
+            return None
+        # 1. Explicit address prefix: 'Adresa exacta este: ...' or 'Adresa: ...'
+        m = re.search(r'adresa\s*(?:exact[aă])?\s*(?:este)?\s*[:\s-]+([A-Za-zĂÎÂȘȚăîâșț0-9\s.,/-]+?)(?:\n|$)', text, re.IGNORECASE)
+        if m:
+            cand = m.group(1).strip()
+            cand = re.split(r'\s{2,}|\n', cand)[0].strip(' ,.')
+            cand = re.sub(r',?\s*Timi[sș]oara\b.*', '', cand, flags=re.IGNORECASE).strip(' ,.')
+            if len(cand) >= 4 and any(w in cand.lower() for w in ['str', 'calea', 'bd', 'bulevard', 'piata', 'aleea', 'splai']):
+                return cand
+
+        # 2. Match street patterns with optional number
+        prefix_pat = r'(?:strada\s+|str\.?\s*|calea\s+|bulevardul\s+|bd\.?\s*|aleea\s+|splaiul\s+|pia[tț]a\s+)'
+        m_num = re.search(rf'\b({prefix_pat}[A-ZĂÎÂȘȚ][A-Za-zĂÎÂȘȚăîâșț\s.-]+?\s+(?:(?:nr\.?|num[aă]rul)\s*)?\d+[A-Za-z]?)(?=[,.;\n]|\s+(?:la|în|in|cu|de|pe|care|este|se|apartament|bloc)\b|$)', text, re.IGNORECASE)
+        if m_num:
+            cand = m_num.group(1).strip(' ,.')
+            if 4 <= len(cand) <= 60:
+                return cand
+
+        m_no_num = re.search(rf'\b({prefix_pat}[A-ZĂÎÂȘȚ][A-Za-zĂÎÂȘȚăîâșț\s.-]+?)(?=[,.;\n]|\s+(?:la|în|in|cu|de|pe|care|este|se|apartament|bloc)\b|$)', text, re.IGNORECASE)
+        if m_no_num:
+            cand = m_no_num.group(1).strip(' ,.')
+            if 4 <= len(cand) <= 60:
+                return cand
+
+        return None
+
+    def parse_price_eur(self, price_str: str) -> Optional[float]:
+        if not price_str:
+            return None
+        cleaned = re.sub(r'<s>.*?</s>', '', price_str, flags=re.DOTALL)
+        cleaned = re.sub(r'\(было.*?\)', '', cleaned, flags=re.DOTALL)
+        is_lei = bool(re.search(r'\b(?:lei|ron)\b', cleaned, re.IGNORECASE))
+        cleaned = cleaned.replace(' ', '')
+        m = re.search(r'(\d+(?:[.,]\d+)?)', cleaned)
+        if not m:
+            return None
+        num_str = m.group(1).replace(',', '.')
+        if re.search(r'\.\d{3}$', num_str):
+            num_str = num_str.replace('.', '')
+        try:
+            val = float(num_str)
+            if is_lei:
+                val = val / 5.0
+            return val
+        except Exception:
+            return None
 
     def fetch_listings(self) -> List[Listing]:
         raise NotImplementedError

@@ -2,8 +2,15 @@ import sqlite3
 from typing import List
 from config import DB_PATH
 
+from contextlib import contextmanager
+
+@contextmanager
 def get_connection():
-    return sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def init_db():
     with get_connection() as conn:

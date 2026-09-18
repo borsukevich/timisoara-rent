@@ -19,7 +19,7 @@ class TelegramNotifier:
         title_ru = translate_to_russian(listing.title or "Квартира в Тимишоаре", max_chars=120)
         title_escaped = html.escape(title_ru)
         
-        price_escaped = html.escape(listing.price or "Уточняйте")
+        price_escaped = html.escape(listing.price or "Уточняйте").replace("&lt;s&gt;", "<s>").replace("&lt;/s&gt;", "</s>")
         rooms_escaped = html.escape(listing.rooms or "3+ камеры")
         area_escaped = html.escape(listing.exact_area or "от 55 м²")
         floor_escaped = html.escape(listing.floor or "Не указан")
@@ -34,6 +34,19 @@ class TelegramNotifier:
         building_escaped = html.escape(listing.building_type or "Обычный фонд")
         map_escaped = html.escape(listing.map_link or "https://maps.google.com/?q=Timisoara")
         url_escaped = html.escape(listing.url)
+
+        pets_escaped = html.escape(listing.pets_policy or "Не указано")
+        smoking_escaped = html.escape(listing.smoking_policy or "")
+        avail_escaped = html.escape(listing.availability or "")
+
+        extra_parts = []
+        if pets_escaped != "Не указано":
+            extra_parts.append(f"🐾 <b>Животные:</b> {pets_escaped}")
+        if smoking_escaped:
+            extra_parts.append(f"🚭 <b>Курение:</b> {smoking_escaped}")
+        if avail_escaped:
+            extra_parts.append(f"📅 <b>Заселение:</b> {avail_escaped}")
+        extra_block = ("\n" + " | ".join(extra_parts)) if extra_parts else ""
 
         badges = []
         if listing.is_owner:
@@ -56,15 +69,32 @@ class TelegramNotifier:
             f"📮 <b>Адрес:</b> {address_escaped}\n"
             f"🏗️ <b>ЖК:</b> {complex_escaped}\n"
             f"🚗 <b>Паркинг:</b> {parking_escaped}\n"
-            f"❄️ <b>Кондиционер:</b> {ac_escaped} | 🌿 <b>Балкон:</b> {balcony_escaped}\n"
+            f"❄️ <b>Кондиционер:</b> {ac_escaped} | 🌿 <b>Балкон:</b> {balcony_escaped}"
+            f"{extra_block}\n"
             f"💼 <b>Комиссия:</b> {commission_escaped}\n"
-            f"🗺️ <b>Метка на карте:</b> <a href=\"{map_escaped}\">Открыть в Google Maps</a>"
+            f"🗺️ <b>Метка на карте:</b> <a href=\"{map_escaped}\">Google Maps</a>"
             f"{badge_block}"
             f"{phone_block}\n\n"
-            f"🔗 <a href=\"{url_escaped}\">Перейти к оригиналу объявления</a>"
+            f"🔗 <a href=\"{url_escaped}\">Оригинал на {source_name}</a>"
         )
         if len(caption) > 1020:
-            caption = caption[:1015] + "..."
+            # Drop bottom link to stay strictly within 1024 chars without breaking HTML tags
+            caption = (
+                f"🏠 <b>[{source_name}]</b> <a href=\"{url_escaped}\">{title_escaped}</a>\n"
+                f"💰 <b>Цена:</b> {price_escaped} | <b>Залог:</b> {deposit_escaped}\n"
+                f"📐 <b>Квадратура:</b> {area_escaped} | <b>Комнат:</b> {rooms_escaped}\n"
+                f"🏢 <b>Этаж:</b> {floor_escaped} | {building_escaped}\n"
+                f"📍 <b>Район:</b> {district_escaped}\n"
+                f"📮 <b>Адрес:</b> {address_escaped}\n"
+                f"🏗️ <b>ЖК:</b> {complex_escaped}\n"
+                f"🚗 <b>Паркинг:</b> {parking_escaped}\n"
+                f"❄️ <b>Кондиционер:</b> {ac_escaped} | 🌿 <b>Балкон:</b> {balcony_escaped}"
+                f"{extra_block}\n"
+                f"💼 <b>Комиссия:</b> {commission_escaped}\n"
+                f"🗺️ <b>Метка на карте:</b> <a href=\"{map_escaped}\">Google Maps</a>"
+                f"{badge_block}"
+                f"{phone_block}"
+            )
         return caption
 
     def send_listing(self, chat_id: int, listing: Listing) -> bool:
@@ -91,6 +121,11 @@ class TelegramNotifier:
                 )
                 if r.status_code == 200:
                     sent_ok = True
+                else:
+                    print(f"[Telegram] sendMediaGroup error {r.status_code}: {r.text}")
+                    if r.status_code == 429:
+                        retry_after = r.json().get("parameters", {}).get("retry_after", 5)
+                        time.sleep(retry_after + 1)
             except Exception as e:
                 print(f"[Telegram] sendMediaGroup exception: {e}")
 
@@ -109,6 +144,11 @@ class TelegramNotifier:
                 )
                 if r.status_code == 200:
                     sent_ok = True
+                else:
+                    print(f"[Telegram] sendPhoto error {r.status_code}: {r.text}")
+                    if r.status_code == 429:
+                        retry_after = r.json().get("parameters", {}).get("retry_after", 5)
+                        time.sleep(retry_after + 1)
             except Exception as e:
                 print(f"[Telegram] sendPhoto exception: {e}")
 
@@ -127,20 +167,20 @@ class TelegramNotifier:
                 )
                 if r.status_code == 200:
                     sent_ok = True
+                else:
+                    print(f"[Telegram] sendMessage error {r.status_code}: {r.text}")
             except Exception as e:
                 print(f"[Telegram] sendMessage failed: {e}")
 
         # 4. SEND FULL UNABRIDGED DESCRIPTION (Без сокращений!)
-        if sent_ok and listing.description and len(listing.description.strip()) > 10:
+        if sent_ok and listing.description and len(listing.description.strip()) > 20:
             try:
                 full_desc_ru = translate_to_russian(listing.description, max_chars=3500)
-                if full_desc_ru:
-                    # Escape html for telegram
+                if full_desc_ru and len(full_desc_ru.strip()) > 20:
+                    if len(full_desc_ru) > 3800:
+                        full_desc_ru = full_desc_ru[:3800] + "..."
                     desc_text = f"📝 <b>Полное описание:</b>\n\n<i>{html.escape(full_desc_ru)}</i>"
-                    if len(desc_text) > 4000:
-                        desc_text = desc_text[:3990] + "..."
-                    
-                    time.sleep(0.3)
+                    time.sleep(0.4)
                     self.send_text_message(chat_id, desc_text)
             except Exception as e:
                 print(f"[Telegram] Error sending full description message: {e}")

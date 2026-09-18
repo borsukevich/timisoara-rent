@@ -28,23 +28,17 @@ class RentalScannerService:
         self.update_offset = 0
         self.is_exporting_initial = False
 
-        # Initialize scrapers with configured URLs
+        # Initialize scrapers with configured URLs (Imobiliare.ro + Storia.ro + Publi24.ro + OLX.ro)
         self.scrapers = [
-            OLXScraper(config.SOURCES_CONFIG["olx"]["url"]),
-            StoriaScraper(config.SOURCES_CONFIG["storia"]["url"]),
             ImobiliareScraper(config.SOURCES_CONFIG["imobiliare"]["url"]),
-            ImoRadarScraper(config.SOURCES_CONFIG["imoradar"]["url"]),
+            StoriaScraper(config.SOURCES_CONFIG["storia"]["url"]),
             Publi24Scraper(config.SOURCES_CONFIG["publi24"]["url"]),
+            OLXScraper(config.SOURCES_CONFIG["olx"]["url"]),
         ]
 
-        # Seed initial state if DB is completely empty (cold-start protection)
-        self.seed_initial_state_if_needed()
-
-    def seed_initial_state_if_needed(self):
-        """If the database is completely empty, seed existing market snapshot without alerting."""
-        stats = database.get_stats()
-        if stats["total_seen"] == 0:
-            logger.info("Fresh database detected. Seeding initial listings without alerts...")
+        # Seed initial state if DB is completely empty (cold-start protection against cloud spam)
+        if database.is_db_empty():
+            logger.info("Empty database detected. Performing initial cold-start seeding (recording existing listings without sending)...")
             count = 0
             for scraper in self.scrapers:
                 try:
@@ -94,13 +88,25 @@ class RentalScannerService:
         for scraper in self.scrapers:
             try:
                 listings = scraper.fetch_listings()
-                organic_items = [l for l in listings if not l.is_promoted and not scraper.is_invalid_rooms(l.title)]
-                top_items = organic_items[:20]
+                organic_items = [l for l in listings if not l.is_promoted]
+                top_items = organic_items[:30]
                 logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for /start...")
 
-                for listing in top_items:
-                    if isinstance(scraper, Publi24Scraper):
-                        listing = scraper.enrich_listing_details(listing)
+                for listing in reversed(top_items):
+                    price_eur = scraper.parse_price_eur(listing.price)
+                    if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
+                        continue
+                    if listing.build_year and listing.build_year < config.CRITERIA.get("min_building_year", 2010):
+                        continue
+
+                    if hasattr(scraper, "enrich_listing_details"):
+                        enriched = scraper.enrich_listing_details(listing)
+                        if not enriched:
+                            continue
+                        listing = enriched
+
+                    if listing.build_year and listing.build_year < config.CRITERIA.get("min_building_year", 2010):
+                        continue
 
                     ok = self.notifier.send_listing(chat_id, listing)
                     if ok:
@@ -165,23 +171,64 @@ class RentalScannerService:
         for scraper in self.scrapers:
             listings = self.scan_source(scraper)
 
-            for listing in listings:
+            # Process in reverse order: older listings first, newest sent last
+            for listing in reversed(listings):
                 if listing.is_promoted:
                     continue
 
                 if database.is_listing_seen(listing.uid, listing.url):
                     continue
 
-                if scraper.is_invalid_rooms(listing.title):
-                    logger.info(f"[{listing.source}] Skipping listing due to room criteria: {listing.title}")
-                    database.mark_listing_seen(listing.uid, listing.source, listing.title, listing.price, listing.url, sent=0)
+                # Check explicit exclusion reason if already determined
+                if listing.exclusion_reason:
+                    logger.info(f"🚫 [{listing.source}] Excluded: {listing.exclusion_reason} | {listing.title}")
+                    database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
+                    continue
+
+                # Filter price strictly 400 - 800 EUR
+                price_eur = scraper.parse_price_eur(listing.price)
+                if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
+                    logger.info(f"🚫 [{listing.source}] Excluded: Цена {price_eur} EUR вне диапазона 400-800 EUR | {listing.title}")
+                    database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
+                    continue
+
+                # Filter building year if known beforehand
+                if listing.build_year and listing.build_year < config.CRITERIA.get("min_building_year", 2010):
+                    logger.info(f"🚫 [{listing.source}] Excluded: Год постройки {listing.build_year} (< 2010) | {listing.title}")
+                    database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
                     continue
 
                 # Truly new organic listing found!
                 logger.info(f"🔥 NEW LISTING FOUND: [{listing.source}] {listing.title} ({listing.price}) - {listing.url}")
 
-                if isinstance(scraper, Publi24Scraper):
-                    listing = scraper.enrich_listing_details(listing)
+                if hasattr(scraper, "enrich_listing_details"):
+                    enriched = scraper.enrich_listing_details(listing)
+                    if not enriched:
+                        reason = getattr(listing, "exclusion_reason", None) or "Не соответствует критериям района / параметров"
+                        logger.info(f"🚫 [{listing.source}] Excluded: {reason} | {listing.title}")
+                        database.mark_listing_seen(
+                            uid=listing.uid,
+                            source=listing.source,
+                            title=listing.title,
+                            price=listing.price,
+                            url=listing.url,
+                            sent=0
+                        )
+                        continue
+                    listing = enriched
+
+                # Filter building year if revealed during enrichment
+                if listing.build_year and listing.build_year < config.CRITERIA.get("min_building_year", 2010):
+                    logger.info(f"🚫 [{listing.source}] Excluded: Год постройки {listing.build_year} (< 2010) | {listing.title}")
+                    database.mark_listing_seen(
+                        uid=listing.uid,
+                        source=listing.source,
+                        title=listing.title,
+                        price=listing.price,
+                        url=listing.url,
+                        sent=0
+                    )
+                    continue
 
                 # Broadcast to Telegram subscribers
                 sent_count = self.notifier.broadcast_listing(listing)
@@ -195,7 +242,7 @@ class RentalScannerService:
                     sent=1 if sent_count > 0 else 0
                 )
                 total_new += 1
-                time.sleep(1.0)
+                time.sleep(1.5)
 
         stats = database.get_stats()
         logger.info(
@@ -216,12 +263,10 @@ class RentalScannerService:
             except Exception as e:
                 logger.error(f"Unexpected error in scan cycle: {e}", exc_info=True)
 
-            sleep_remaining = config.SCAN_INTERVAL_SECONDS
-            while sleep_remaining > 0:
+            next_scan_time = time.time() + config.SCAN_INTERVAL_SECONDS
+            while time.time() < next_scan_time:
                 self.check_telegram_subscribers()
-                step = min(3, sleep_remaining)
-                time.sleep(step)
-                sleep_remaining -= step
+                time.sleep(1)
 
 if __name__ == "__main__":
     service = RentalScannerService()

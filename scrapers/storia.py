@@ -1,7 +1,7 @@
 from curl_cffi import requests
 from bs4 import BeautifulSoup
 import json
-from typing import List
+from typing import List, Optional
 from scrapers.base import BaseScraper, Listing
 
 class StoriaScraper(BaseScraper):
@@ -41,27 +41,19 @@ class StoriaScraper(BaseScraper):
 
                 url = f"https://www.storia.ro/ro/oferta/{slug}" if slug else item.get("href", "")
 
-                is_promoted = bool(item.get("isPromoted", False))
-
-                # Check if it is a bumped or old ad (not created today / > 24 hours)
+                is_promoted = False
                 created_str = item.get("createdAtFirst") or item.get("dateCreated")
-                if created_str:
-                    try:
-                        from datetime import datetime
-                        clean_date = created_str.strip().replace(" ", "T")
-                        dt = datetime.fromisoformat(clean_date)
-                        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
-                        age_hours = (now - dt).total_seconds() / 3600
-                        if age_hours > 24.0 or dt.date() != now.date():
-                            is_promoted = True
-                    except Exception:
-                        pass
 
                 # Price
                 tp = item.get("totalPrice") or {}
                 price_val = tp.get("value")
                 price_curr = tp.get("currency", "EUR")
                 price = f"{price_val} {price_curr}" if price_val else ""
+
+                # Price filter: strictly 400 - 800 EUR
+                price_eur = self.parse_price_eur(price)
+                if price_eur is not None and (price_eur < 400 or price_eur > 800):
+                    continue
 
                 # Rooms & Area
                 rooms_raw = str(item.get("roomsNumber") or "")
@@ -105,10 +97,10 @@ class StoriaScraper(BaseScraper):
                 for img in (item.get("images") or []):
                     if isinstance(img, dict):
                         img_url = img.get("large") or img.get("medium")
-                        if img_url:
+                        if img_url and img_url not in photos:
                             photos.append(img_url)
 
-                # Description
+                # Description snippet
                 desc = self.clean_html(item.get("shortDescription") or "")
 
                 # Analysis
@@ -155,7 +147,7 @@ class StoriaScraper(BaseScraper):
                     is_promoted=is_promoted,
                     is_owner=is_owner,
                     has_boiler=has_boiler,
-                    date_text=item.get("createdAtFirst") or item.get("dateCreated"),
+                    date_text=created_str,
                     is_today=True
                 ))
 
@@ -163,3 +155,117 @@ class StoriaScraper(BaseScraper):
             print(f"[Storia] Exception while fetching: {e}")
 
         return listings
+
+    def enrich_listing_details(self, listing: Listing) -> Optional[Listing]:
+        """Fetches the full offer page on Storia to extract complete description, all photos, phone, and specs."""
+        try:
+            r = requests.get(listing.url, impersonate="chrome124", timeout=10)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "html.parser")
+                next_data = soup.find("script", id="__NEXT_DATA__")
+                if next_data:
+                    data = json.loads(next_data.string)
+                    ad = data.get("props", {}).get("pageProps", {}).get("ad") or {}
+
+                    # 1. Full description
+                    raw_desc = ad.get("description", "")
+                    if raw_desc:
+                        full_desc = self.clean_html(raw_desc)
+                        if full_desc:
+                            listing.description = full_desc
+
+                    # 2. Photos: get all high-resolution photos
+                    images = ad.get("images", [])
+                    if images:
+                        full_photos = []
+                        for img in images:
+                            if isinstance(img, dict):
+                                img_url = img.get("large") or img.get("medium")
+                                if img_url and img_url not in full_photos:
+                                    full_photos.append(img_url)
+                        if full_photos:
+                            listing.photos = full_photos
+
+                    # 3. Owner Phone
+                    owner = ad.get("owner", {}) or {}
+                    phones = owner.get("phones", [])
+                    if phones:
+                        listing.phone = self.extract_phone(phones[0])
+
+                    # 4. Characteristics
+                    chars = {c.get("key"): c.get("value") for c in ad.get("characteristics", []) if isinstance(c, dict)}
+
+                    # Deposit
+                    if "deposit" in chars and chars["deposit"]:
+                        dep_val = chars["deposit"]
+                        listing.deposit_info = f"{dep_val} €" if str(dep_val).isdigit() else str(dep_val)
+
+                    # Heating / Boiler
+                    heating = str(chars.get("heating", "")).lower()
+                    if any(k in heating for k in ["gas", "individual", "centrala", "gaz"]):
+                        listing.has_boiler = True
+
+                    # Floor
+                    floor_no = chars.get("floor_no", "")
+                    building_floors = chars.get("building_floors_num", "")
+                    if floor_no:
+                        cur_floor = str(floor_no).replace("floor_", "")
+                        if cur_floor == "ground":
+                            cur_floor = "1 (Parter)"
+                        if building_floors:
+                            listing.floor = f"{cur_floor} из {building_floors} этаж"
+                        else:
+                            listing.floor = f"{cur_floor} этаж"
+
+                    # Building year
+                    build_year = chars.get("build_year")
+                    if not build_year:
+                        build_year = self.extract_build_year(f"{listing.title} {listing.description}")
+                    if build_year:
+                        try:
+                            year_int = int(build_year)
+                            listing.build_year = year_int
+                            if year_int < 2010:
+                                listing.exclusion_reason = f"Год постройки {year_int} (< 2010)"
+                                return None
+                            listing.building_type = f"Дом {year_int} года"
+                        except Exception:
+                            pass
+
+                    # 5. Full text analysis for amenities
+                    full_text = f"{listing.title} {listing.description}"
+                    if not listing.has_boiler:
+                        listing.has_boiler = self.check_boiler(full_text)
+                    listing.is_owner = bool(ad.get("isPrivateOwner", False)) or self.check_owner(full_text) or listing.is_owner
+
+                    complex_cand = self.detect_complex(full_text)
+                    if complex_cand != "Не указан":
+                        listing.complex_name = complex_cand
+
+                    parking_cand = self.analyze_parking(full_text)
+                    if parking_cand != "Не указано":
+                        listing.parking_info = parking_cand
+
+                    # Exact street address extraction
+                    street = self.extract_street_address(full_text)
+                    if street and not listing.street:
+                        listing.street = street
+                        if listing.district and listing.district != "Timișoara":
+                            listing.full_address = f"{street}, {listing.district}, Timișoara"
+                        else:
+                            listing.full_address = f"{street}, Timișoara"
+                        listing.map_link = self.generate_map_link(address=listing.full_address)
+
+                    # Pets, Availability, Smoking
+                    listing.pets_policy = self.analyze_pets(full_text)
+                    listing.availability = self.analyze_availability(full_text)
+                    listing.smoking_policy = self.analyze_smoking(full_text)
+
+                    listing.ac_info = self.analyze_ac(full_text)
+                    listing.balcony_info = self.analyze_balcony(full_text)
+                    if listing.deposit_info in ["1 месяц (обычно)", "Не указан"]:
+                        listing.deposit_info = self.analyze_deposit(full_text)
+                    listing.commission_info = "0% (Без комиссии)" if listing.is_owner else "Уточнять (обычно 50%)"
+        except Exception as e:
+            print(f"[Storia] Error enriching {listing.url}: {e}")
+        return listing
