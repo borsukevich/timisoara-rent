@@ -483,11 +483,14 @@ class TelegramNotifier:
                                 "✅ <b>Мониторинг активен!</b> Бот проверяет площадки каждые 3 минуты.",
                                 reply_markup=self.REPLY_KEYBOARD
                             )
+                    elif t_lower.startswith("/links") or t_lower.startswith("/sources") or "ссылк" in t_lower or "сайты" in t_lower:
+                        logger.info(f"[Telegram] Links triggered by {chat_id} (@{username})")
+                        self.send_links(chat_id)
                     elif (
                         t_lower.startswith("/reset")
                         or t_lower.startswith("/restart")
                         or any(k in t_lower for k in [
-                            "перезапу", "поиск", "сброс", "занов", "рестарт", "restart", "reset", "обнови", "очист"
+                            "перезапу", "сброс", "занов", "рестарт", "restart", "reset", "очист"
                         ])
                     ):
                         logger.info(f"[Telegram] /reset triggered by {chat_id} (@{username}) with text: '{text}'")
@@ -506,9 +509,6 @@ class TelegramNotifier:
                     elif t_lower.startswith("/stats") or "статистик" in t_lower:
                         logger.info(f"[Telegram] Stats triggered by {chat_id} (@{username})")
                         self.send_stats(chat_id)
-                    elif t_lower.startswith("/links") or t_lower.startswith("/sources") or "ссылк" in t_lower or "сайты" in t_lower:
-                        logger.info(f"[Telegram] Links triggered by {chat_id} (@{username})")
-                        self.send_links(chat_id)
                     else:
                         logger.info(f"[Telegram] Unrecognized command from {chat_id} (@{username}): '{text}'")
                         self.send_text_message(
