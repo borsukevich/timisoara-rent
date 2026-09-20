@@ -85,7 +85,7 @@ class RentolaScraper(BaseScraper):
                     price = self.extract_price_from_text(tile.get_text()) or ""
 
                 price_eur = self.parse_price_eur(price)
-                if price_eur is not None and (price_eur < 400 or price_eur > 800):
+                if price_eur is not None and (price_eur < 400 or price_eur > 850):
                     continue
 
                 # Area

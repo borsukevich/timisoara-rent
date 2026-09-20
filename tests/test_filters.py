@@ -67,17 +67,17 @@ class TestFilters(unittest.TestCase):
         self.assertIsNone(self.scraper.parse_price_eur("Pret la cerere"))
 
     def test_price_range_criteria(self):
-        # Criteria strictly 400 - 800 EUR
-        valid_prices = ["400 €", "550 €", "800 €", "2500 lei"]
+        # Criteria strictly 400 - 850 EUR
+        valid_prices = ["400 €", "550 €", "800 €", "850 €", "2500 lei"]
         for p in valid_prices:
             val = self.scraper.parse_price_eur(p)
             self.assertIsNotNone(val)
-            self.assertTrue(400 <= val <= 800)
+            self.assertTrue(400 <= val <= 850)
 
-        invalid_prices = ["350 €", "850 €", "Уточняйте", "", "1500 lei"]
+        invalid_prices = ["350 €", "900 €", "Уточняйте", "", "1500 lei"]
         for p in invalid_prices:
             val = self.scraper.parse_price_eur(p)
-            is_valid = (val is not None and 400 <= val <= 800)
+            is_valid = (val is not None and 400 <= val <= 850)
             self.assertFalse(is_valid)
 
     def test_publi24_and_olx_zone_disambiguation(self):

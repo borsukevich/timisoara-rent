@@ -426,9 +426,9 @@ class BaseScraper:
                         candidates.append((eur_val, f"{eur_val} €"))
 
         if candidates:
-            # If any candidate is in the target 400-800 EUR range, prioritize it!
+            # If any candidate is in the target 400-850 EUR range, prioritize it!
             for eur_val, formatted in candidates:
-                if 400 <= eur_val <= 800:
+                if 400 <= eur_val <= 850:
                     return formatted
             return candidates[0][1]
 

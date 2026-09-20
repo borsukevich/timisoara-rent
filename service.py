@@ -138,7 +138,7 @@ class RentalScannerService:
                     for listing in organic_items:
                         if len(qualified_to_send) < 3:
                             price_eur = scraper.parse_price_eur(listing.price)
-                            if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
+                            if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 850)):
                                 remaining_to_seed.append(listing)
                                 continue
 
@@ -156,10 +156,10 @@ class RentalScannerService:
                                 remaining_to_seed.append(listing)
                                 continue
 
-                            # Strict price check: MUST have valid price in 400 - 800 EUR range
+                            # Strict price check: MUST have valid price in 400 - 850 EUR range
                             price_eur = scraper.parse_price_eur(listing.price)
-                            if price_eur is None or price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800):
-                                logger.info(f"🚫 [{listing.source}] Excluded: Нет цены 400-800 EUR ('{listing.price}') | {listing.title}")
+                            if price_eur is None or price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 850):
+                                logger.info(f"🚫 [{listing.source}] Excluded: Нет цены 400-850 EUR ('{listing.price}') | {listing.title}")
                                 remaining_to_seed.append(listing)
                                 continue
 
@@ -262,10 +262,10 @@ class RentalScannerService:
                     database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
                     continue
 
-                # Filter card price strictly 400 - 800 EUR if present
+                # Filter card price strictly 400 - 850 EUR if present
                 price_eur = scraper.parse_price_eur(listing.price)
-                if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
-                    logger.info(f"🚫 [{listing.source}] Excluded: Цена {price_eur} EUR вне диапазона 400-800 EUR | {listing.title}")
+                if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 850)):
+                    logger.info(f"🚫 [{listing.source}] Excluded: Цена {price_eur} EUR вне диапазона 400-850 EUR | {listing.title}")
                     database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
                     continue
 
@@ -299,10 +299,10 @@ class RentalScannerService:
                     )
                     continue
 
-                # Strict price check: MUST have valid price in 400 - 800 EUR range
+                # Strict price check: MUST have valid price in 400 - 850 EUR range
                 price_eur = scraper.parse_price_eur(listing.price)
-                if price_eur is None or price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800):
-                    logger.info(f"🚫 [{listing.source}] Excluded: Нет подтвержденной цены 400-800 EUR ('{listing.price}') | {listing.title}")
+                if price_eur is None or price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 850):
+                    logger.info(f"🚫 [{listing.source}] Excluded: Нет подтвержденной цены 400-850 EUR ('{listing.price}') | {listing.title}")
                     database.mark_listing_seen(
                         uid=listing.uid,
                         source=listing.source,
@@ -339,7 +339,7 @@ class RentalScannerService:
     def start_loop(self):
         logger.info("==================================================")
         logger.info("   TIMIȘOARA RENT SCANNER BOT STARTED 🚀        ")
-        logger.info(f"   Target: 3+ rooms, <=800 EUR, >=55 sqm          ")
+        logger.info(f"   Target: 3+ rooms, <=850 EUR, >=55 sqm          ")
         logger.info(f"   Interval: every {config.SCAN_INTERVAL_SECONDS}s")
         logger.info("==================================================")
 

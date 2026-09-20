@@ -394,7 +394,7 @@ class TelegramNotifier:
     def send_links(self, chat_id: int):
         msg = (
             "🌐 <b>Целевые ссылки поиска на 5 порталах:</b>\n"
-            "<i>(Параметры: 3+ комн., 400–800 €, от 55 м², север/центр Тимишоары)</i>\n\n"
+            "<i>(Параметры: 3+ комн., 400–850 €, от 55 м², север/центр Тимишоары)</i>\n\n"
             f"1️⃣ <b>OLX.ro:</b>\n{SOURCES_CONFIG['olx']['url']}\n\n"
             f"2️⃣ <b>Storia.ro:</b>\n{SOURCES_CONFIG['storia']['url']}\n\n"
             f"3️⃣ <b>Imobiliare.ro:</b>\n{SOURCES_CONFIG['imobiliare']['url']}\n\n"

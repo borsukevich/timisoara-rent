@@ -159,10 +159,10 @@ class OLXScraper(BaseScraper):
                 if not price:
                     price = self.extract_price_from_text(full_text) or ""
 
-                # Price filter: strictly 400 - 800 EUR
+                # Price filter: strictly 400 - 850 EUR
                 price_eur = self.parse_price_eur(price)
-                if price_eur is not None and (price_eur < 400 or price_eur > 800):
-                    exclusion_reason = exclusion_reason or f"Цена {price_eur} EUR вне диапазона 400-800 EUR"
+                if price_eur is not None and (price_eur < 400 or price_eur > 850):
+                    exclusion_reason = exclusion_reason or f"Цена {price_eur} EUR вне диапазона 400-850 EUR"
 
                 # Photos (high-res 1600x1200)
                 raw_photos = ad.get("photos", [])

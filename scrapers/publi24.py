@@ -156,9 +156,9 @@ class Publi24Scraper(BaseScraper):
                 if not price or self.parse_price_eur(price) is None:
                     price = self.extract_price_from_text(f"{title} {item_text}") or self.extract_price_from_text(str(item)) or ""
 
-                # Price filter: strictly 400 - 800 EUR
+                # Price filter: strictly 400 - 850 EUR
                 price_eur = self.parse_price_eur(price)
-                if price_eur is not None and (price_eur < 400 or price_eur > 800):
+                if price_eur is not None and (price_eur < 400 or price_eur > 850):
                     continue
 
                 # 5. Extract date (e.g. azi 12:49)
