@@ -231,15 +231,12 @@ class RentalScannerService:
                     database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
                     continue
 
-                # Filter price strictly 400 - 800 EUR
+                # Filter card price strictly 400 - 800 EUR if present
                 price_eur = scraper.parse_price_eur(listing.price)
                 if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
                     logger.info(f"🚫 [{listing.source}] Excluded: Цена {price_eur} EUR вне диапазона 400-800 EUR | {listing.title}")
                     database.mark_listing_seen(uid=listing.uid, source=listing.source, title=listing.title, price=listing.price, url=listing.url, sent=0)
                     continue
-
-                # Truly new organic listing found!
-                logger.info(f"🔥 NEW LISTING FOUND: [{listing.source}] {listing.title} ({listing.price}) - {listing.url}")
 
                 if hasattr(scraper, "enrich_listing_details"):
                     enriched = scraper.enrich_listing_details(listing)
@@ -284,6 +281,9 @@ class RentalScannerService:
                         sent=0
                     )
                     continue
+
+                # Fully qualified and verified organic listing!
+                logger.info(f"🔥 NEW LISTING FOUND: [{listing.source}] {listing.title} ({listing.price}) - {listing.url}")
 
                 # Broadcast to Telegram subscribers
                 sent_count = self.notifier.broadcast_listing(listing)

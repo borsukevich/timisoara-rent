@@ -37,8 +37,9 @@ EXCLUDED_SOUTH_PATTERNS = [
 PREFERRED_NORTH_CENTRAL_ZONES = [
     r'lipovei', r'aradului', r'torontal\w*', r'bucovin\w*', r'circumvala[tț]iun\w*',
     r'mehala', r'dacia', r'take\s*ionescu', r'tipograf\w*', r'ultracentral\w*',
-    r'central\w*', r'cetate', r'unirii', r'antim', r'iulius', r'botanic\w*',
-    r'miresei', r'sever\s*bocu', r'felix', r'ion\s*ionescu', r'simion\s*b[aă]rnu[tț]iu'
+    r'\bcentru\b', r'\bcentral\b', r'\bzona\s+central[aă]\b', r'cetate', r'unirii',
+    r'antim', r'iulius', r'botanic\w*', r'miresei', r'sever\s*bocu', r'felix',
+    r'ion\s*ionescu', r'simion\s*b[aă]rnu[tț]iu'
 ]
 
 class OLXScraper(BaseScraper):
@@ -54,12 +55,16 @@ class OLXScraper(BaseScraper):
 
     def is_explicitly_excluded(self, text: str, context: str = "") -> Optional[str]:
         """Returns the matched unwanted southern zone if explicitly stated, else None."""
-        if context and self.is_north_zone(context):
-            return None
         t = text.lower()
         for pat in EXCLUDED_SOUTH_PATTERNS:
             m = re.search(r'\b' + pat, t, re.IGNORECASE)
             if m:
+                # If context itself explicitly contains the south zone, it's definitely south!
+                if context and any(re.search(r'\b' + sp, context, re.IGNORECASE) for sp in EXCLUDED_SOUTH_PATTERNS):
+                    return m.group(0)
+                # If context is explicitly in north zone and NOT south, then south match in body was just reference/distance
+                if context and self.is_north_zone(context):
+                    return None
                 return m.group(0)
         return None
 

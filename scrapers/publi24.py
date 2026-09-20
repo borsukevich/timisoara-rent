@@ -2,6 +2,7 @@ from curl_cffi import requests
 from bs4 import BeautifulSoup
 import re
 import html
+import urllib.parse
 from typing import List, Optional
 from scrapers.base import BaseScraper, Listing
 
@@ -37,8 +38,9 @@ EXCLUDED_SOUTH_PATTERNS = [
 PREFERRED_NORTH_CENTRAL_ZONES = [
     r'lipovei', r'aradului', r'torontal\w*', r'bucovin\w*', r'circumvala[tț]iun\w*',
     r'mehala', r'dacia', r'take\s*ionescu', r'tipograf\w*', r'ultracentral\w*',
-    r'central\w*', r'cetate', r'unirii', r'antim', r'iulius', r'botanic\w*',
-    r'miresei', r'sever\s*bocu', r'felix', r'ion\s*ionescu', r'simion\s*b[aă]rnu[tț]iu'
+    r'\bcentru\b', r'\bcentral\b', r'\bzona\s+central[aă]\b', r'cetate', r'unirii',
+    r'antim', r'iulius', r'botanic\w*', r'miresei', r'sever\s*bocu', r'felix',
+    r'ion\s*ionescu', r'simion\s*b[aă]rnu[tț]iu'
 ]
 
 class Publi24Scraper(BaseScraper):
@@ -54,12 +56,16 @@ class Publi24Scraper(BaseScraper):
 
     def is_south_zone(self, text: str, context: str = "") -> Optional[str]:
         """Returns the matched excluded southern zone, or None if in North/Center."""
-        if context and self.is_north_zone(context):
-            return None
         t = text.lower()
         for pat in EXCLUDED_SOUTH_PATTERNS:
             m = re.search(r'\b' + pat, t, re.IGNORECASE)
             if m:
+                # If context itself explicitly contains the south zone, it's definitely south!
+                if context and any(re.search(r'\b' + sp, context, re.IGNORECASE) for sp in EXCLUDED_SOUTH_PATTERNS):
+                    return m.group(0)
+                # If context is explicitly in north zone and NOT south, then south match in body was just reference/distance
+                if context and self.is_north_zone(context):
+                    return None
                 return m.group(0)
         return None
 
@@ -106,21 +112,31 @@ class Publi24Scraper(BaseScraper):
 
                 item_text = item.get_text(" ", strip=True)
 
-                # 3. Check for excluded South zones directly in card
-                south_match = self.is_south_zone(f"{title} {item_text}", context=title)
-                if south_match:
-                    # Skip South zones (outside user map polygon)
-                    continue
-
-                # Check city / location on card
+                # 3. Location and South zone checks on card
                 loc_el = item.select_one('.article-location, [class*="location"]')
-                loc_text = loc_el.get_text(strip=True) if loc_el else ""
-                if loc_text and not self.is_timisoara_location(loc_text):
-                    continue
+                loc_raw = loc_el.get_text(strip=True) if loc_el else ""
+                loc_text = loc_raw
+                while '%' in loc_text:
+                    new_loc = urllib.parse.unquote(loc_text)
+                    if new_loc == loc_text:
+                        break
+                    loc_text = new_loc
+                loc_text = loc_text.replace('+', ' ').strip()
+
+                if loc_text:
+                    if not self.is_timisoara_location(loc_text):
+                        continue
+                    if self.is_south_zone(loc_text, context=loc_text):
+                        continue
+
                 if not self.is_timisoara_location(title):
                     continue
 
-                # 4. Extract price (show both new and old price if discounted)
+                south_match = self.is_south_zone(f"{title} {item_text}", context=title)
+                if south_match:
+                    continue
+
+                # 4. Extract price: ALWAYS prioritize dedicated structured price fields first
                 new_price_el = item.select_one('.new-price')
                 old_price_el = item.select_one('.old-price')
 
@@ -133,9 +149,10 @@ class Publi24Scraper(BaseScraper):
                 elif old_price_el:
                     price = old_price_el.get_text(strip=True)
                 else:
-                    price_el = item.select_one('.article-price, .product-price, [class*="price"]')
+                    price_el = item.select_one('.article-price') or item.select_one('.product-price') or item.select_one('[class*="price"]')
                     price = price_el.get_text(strip=True) if price_el else ""
 
+                # Fallback to markup regex ONLY if regular price fields were absent or unparseable
                 if not price or self.parse_price_eur(price) is None:
                     price = self.extract_price_from_text(f"{title} {item_text}") or self.extract_price_from_text(str(item)) or ""
 
@@ -152,11 +169,17 @@ class Publi24Scraper(BaseScraper):
                 area_m = re.search(r'(\d+[\s.,]?\d*)\s*m(?:p|2|<sup>2</sup>)?', item_text, re.IGNORECASE)
                 exact_area = f"{area_m.group(1).strip()} м²" if area_m else "от 50 м²"
 
-                # 7. Extract district name if detectable from title/card
+                # 7. Extract district name if detectable from location element or title
                 district = "Timișoara"
-                loc_m = re.search(r'(?:zona|în)\s+([A-Za-zĂÎÂȘȚăîâșț\s-]+)', title, re.IGNORECASE)
-                if loc_m:
-                    district = loc_m.group(1).strip()
+                if loc_text:
+                    cand_dist = loc_text.split(',')[0].strip()
+                    if cand_dist.lower() not in ["timisoara", "timișoara", "timis", "timiș"] and len(cand_dist) >= 3:
+                        district = cand_dist
+
+                if district == "Timișoara":
+                    loc_m = re.search(r'(?:zona|în)\s+([A-Za-zĂÎÂȘȚăîâșț\s-]+)', title, re.IGNORECASE)
+                    if loc_m:
+                        district = loc_m.group(1).strip()
 
                 full_address = f"{district}, Timișoara" if district != "Timișoara" else "Timișoara"
                 map_link = self.generate_map_link(address=full_address)
@@ -274,13 +297,17 @@ class Publi24Scraper(BaseScraper):
                 listing.exclusion_reason = f"Южный район в описании: '{south_m}'"
                 return None
 
-            # 2.5 Extract price from detail page if missing
+            # 2.5 Extract price from detail page if missing (never overwrite valid structured price)
             if not listing.price or self.parse_price_eur(listing.price) is None:
-                p_el = soup.select_one('.product-price, .article-price, #price, [itemprop="price"], .price, [class*="price"]')
+                p_el = soup.select_one('.product-price') or soup.select_one('.article-price') or soup.select_one('#price') or soup.select_one('[itemprop="price"]')
                 if p_el:
-                    cand_p = p_el.get_text(strip=True)
-                    if cand_p and self.parse_price_eur(cand_p):
+                    p_copy = BeautifulSoup(str(p_el), "html.parser")
+                    for extra in p_copy.select('.pricePerSquare, .detail-price-type'):
+                        extra.decompose()
+                    cand_p = p_copy.get_text(" ", strip=True)
+                    if cand_p and self.parse_price_eur(cand_p) is not None:
                         listing.price = cand_p
+                # Last resort fallback to markup / text regex
                 if not listing.price or self.parse_price_eur(listing.price) is None:
                     cand_p = self.extract_price_from_text(listing.description) or self.extract_price_from_text(r.text)
                     if cand_p:

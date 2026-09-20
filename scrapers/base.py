@@ -387,7 +387,10 @@ class BaseScraper:
             r'metrou\b', r'[sș]elimb[aă]r\b', r'selimbar\b', r'coresi\b',
             r'sector(?:ul)?\s*[1-6]\b', r'militari\b', r'pantelimon\b',
             r'berceni\b', r'drumul taberei\b', r'pipera\b', r'floreasca\b',
-            r'tineretului\b', r'parcul carol\b', r'\btitan\b', r'ap[aă]r[aă]torii patriei\b'
+            r'tineretului\b', r'parcul carol\b', r'\btitan\b', r'ap[aă]r[aă]torii patriei\b',
+            r'pite[sș]ti\b', r'ploie[sș]ti\b', r'bac[aă]u\b', r'suceava\b', r'gala[tț]i\b',
+            r'br[aă]ila\b', r'baia mare\b', r't[aâ]rgu\s*mure[sș]\b', r'targu\s*mures\b',
+            r'alba\s*iulia\b', r'deva\b', r'hunedoara\b', r're[sș]i[tț]a\b'
         ]
         for pat in excluded_locations:
             if re.search(pat, t):
