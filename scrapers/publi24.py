@@ -177,7 +177,7 @@ class Publi24Scraper(BaseScraper):
                         district = cand_dist
 
                 if district == "Timișoara":
-                    loc_m = re.search(r'(?:zona|în)\s+([A-Za-zĂÎÂȘȚăîâșț\s-]+)', title, re.IGNORECASE)
+                    loc_m = re.search(r'(?:zona|în)\s+([A-Za-zĂÎÂȘȚăîâșț0-9\s-]+?)(?=[,.;|]|\s*-\s*|\s+(?:apartament|ap\b|bloc|etaj|la|cu|de|pe|decomandat)\b|$)', title, re.IGNORECASE)
                     if loc_m:
                         district = loc_m.group(1).strip()
 
