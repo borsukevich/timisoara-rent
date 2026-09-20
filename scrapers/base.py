@@ -371,7 +371,10 @@ class BaseScraper:
             return None
 
     def is_timisoara_location(self, text: str) -> bool:
-        """Returns False if location or text indicates another city/suburb outside Timișoara."""
+        """Returns False if location or text indicates another city/suburb outside Timișoara.
+        Applied ONLY for publi24 as other portals already have strict platform-level geo bounds."""
+        if self.name != "publi24" and self.name != "dummy":
+            return True
         if not text:
             return True
         t = text.lower()

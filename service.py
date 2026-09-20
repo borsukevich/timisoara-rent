@@ -149,12 +149,13 @@ class RentalScannerService:
                                     continue
                                 listing = enriched
 
-                            # Strict Timișoara check
-                            full_loc = f"{listing.title} {listing.district} {listing.full_address}"
-                            if not scraper.is_timisoara_location(full_loc):
-                                logger.info(f"🚫 [{listing.source}] Excluded: Не в Тимишоаре | {listing.title}")
-                                remaining_to_seed.append(listing)
-                                continue
+                            # Strict Timișoara check (applied only to publi24)
+                            if scraper.name == "publi24":
+                                full_loc = f"{listing.title} {listing.district} {listing.full_address}"
+                                if not scraper.is_timisoara_location(full_loc):
+                                    logger.info(f"🚫 [{listing.source}] Excluded: Не в Тимишоаре | {listing.title}")
+                                    remaining_to_seed.append(listing)
+                                    continue
 
                             # Strict price check: MUST have valid price in 400 - 850 EUR range
                             price_eur = scraper.parse_price_eur(listing.price)
@@ -285,19 +286,20 @@ class RentalScannerService:
                         continue
                     listing = enriched
 
-                # Strict Timișoara check
-                full_loc = f"{listing.title} {listing.district} {listing.full_address}"
-                if not scraper.is_timisoara_location(full_loc):
-                    logger.info(f"🚫 [{listing.source}] Excluded: Не в Тимишоаре | {listing.title}")
-                    database.mark_listing_seen(
-                        uid=listing.uid,
-                        source=listing.source,
-                        title=listing.title,
-                        price=listing.price,
-                        url=listing.url,
-                        sent=0
-                    )
-                    continue
+                # Strict Timișoara check (applied only to publi24)
+                if scraper.name == "publi24":
+                    full_loc = f"{listing.title} {listing.district} {listing.full_address}"
+                    if not scraper.is_timisoara_location(full_loc):
+                        logger.info(f"🚫 [{listing.source}] Excluded: Не в Тимишоаре | {listing.title}")
+                        database.mark_listing_seen(
+                            uid=listing.uid,
+                            source=listing.source,
+                            title=listing.title,
+                            price=listing.price,
+                            url=listing.url,
+                            sent=0
+                        )
+                        continue
 
                 # Strict price check: MUST have valid price in 400 - 850 EUR range
                 price_eur = scraper.parse_price_eur(listing.price)
