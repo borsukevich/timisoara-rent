@@ -169,8 +169,8 @@ class RentalScannerService:
 
                     logger.info(f"[{scraper.name}] Sending {len(qualified_to_send)} qualified posts to {chat_id}...")
 
-                    # Send qualified listings in reverse order so the newest appears last
-                    for listing in reversed(qualified_to_send):
+                    # Send qualified listings in top-to-bottom order (matching website order)
+                    for listing in qualified_to_send:
                         ok = self.notifier.send_listing(chat_id, listing)
                         if ok:
                             sent_count += 1

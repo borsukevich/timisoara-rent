@@ -377,20 +377,20 @@ class BaseScraper:
         t = text.lower()
         # Other cities or external suburbs outside Timișoara
         excluded_locations = [
-            r'sibiu\b', r'cluj\b', r'arad\b', r'bucure[sș]ti\b', r'oradea\b', r'bra[sș]ov\b',
-            r'ia[sș]i\b', r'craiova\b', r'constan[tț]a\b', r'lugoj\b', r'buzia[sș]\b',
-            r's[aâ]nnicolau\b', r'jimbolia\b', r'f[aă]get\b', r'deta\b', r'giroc\b',
-            r'chi[sș]oda\b', r'dumbr[aă]vi[tț]a\b', r'mo[sș]ni[tț]a\b', r'ghiroda\b',
-            r's[aă]c[aă]laz\b', r's[aâ]nandrei\b', r'\b[sș]ag\b', r'remetea\b', r'peciu\b',
-            r's[aâ]nmihaiu\b', r'giarmata\b', r'orti[sș]oara\b', r'reca[sș]\b', r'g[aă]taia\b',
-            r'covaci\b', r'utvin\b', r'carani\b', r'beregs[aă]u\b',
-            r'metrou\b', r'[sș]elimb[aă]r\b', r'selimbar\b', r'coresi\b',
-            r'sector(?:ul)?\s*[1-6]\b', r'militari\b', r'pantelimon\b',
-            r'berceni\b', r'drumul taberei\b', r'pipera\b', r'floreasca\b',
-            r'tineretului\b', r'parcul carol\b', r'\btitan\b', r'ap[aă]r[aă]torii patriei\b',
-            r'pite[sș]ti\b', r'ploie[sș]ti\b', r'bac[aă]u\b', r'suceava\b', r'gala[tț]i\b',
-            r'br[aă]ila\b', r'baia mare\b', r't[aâ]rgu\s*mure[sș]\b', r'targu\s*mures\b',
-            r'alba\s*iulia\b', r'deva\b', r'hunedoara\b', r're[sș]i[tț]a\b'
+            r'\bsibiu\b', r'\bcluj\b', r'(?<!calea\s)(?<!strada\s)(?<!zona\s)(?<!b-dul\s)\barad\b', r'\bbucure[sș]ti\b', r'\boradea\b', r'\bbra[sș]ov\b',
+            r'\bia[sș]i\b', r'\bcraiova\b', r'\bconstan[tț]a\b', r'(?<!calea\s)\blugoj\b', r'\bbuzia[sș]\b',
+            r'\bs[aâ]nnicolau\b', r'\bjimbolia\b', r'\bf[aă]get\b', r'\bdeta\b', r'\bgiroc\b',
+            r'\bchi[sș]oda\b', r'\bdumbr[aă]vi[tț]a\b', r'\bmo[sș]ni[tț]a\b', r'\bghiroda\b',
+            r'\bs[aă]c[aă]laz\b', r'\bs[aâ]nandrei\b', r'\b[sș]ag\b', r'\bremetea\b', r'\bpeciu\b',
+            r'\bs[aâ]nmihaiu\b', r'\bgiarmata\b', r'\borti[sș]oara\b', r'\breca[sș]\b', r'\bg[aă]taia\b',
+            r'\bcovaci\b', r'\butvin\b', r'\bcarani\b', r'\bberegs[aă]u\b',
+            r'\bmetrou\b', r'\b[sș]elimb[aă]r\b', r'\bselimbar\b', r'\bcoresi\b',
+            r'\bsector(?:ul)?\s*[1-6]\b', r'\bmilitari\b', r'\bpantelimon\b',
+            r'\bberceni\b', r'\bdrumul taberei\b', r'\bpipera\b', r'\bfloreasca\b',
+            r'\btineretului\b', r'\bparcul carol\b', r'\btitan\b', r'\bap[aă]r[aă]torii patriei\b',
+            r'\bpite[sș]ti\b', r'\bploie[sș]ti\b', r'\bbac[aă]u\b', r'\bsuceava\b', r'\bgala[tț]i\b',
+            r'\bbr[aă]ila\b', r'\bbaia mare\b', r'\bt[aâ]rgu\s*mure[sș]\b', r'\btargu\s*mures\b',
+            r'\balba\s*iulia\b', r'\bdeva\b', r'\bhunedoara\b', r'\bre[sș]i[tț]a\b'
         ]
         for pat in excluded_locations:
             if re.search(pat, t):

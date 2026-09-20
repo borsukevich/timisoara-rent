@@ -22,6 +22,9 @@ class TestFilters(unittest.TestCase):
         self.assertTrue(self.scraper.is_timisoara_location("Iosefin, Timisoara"))
         self.assertTrue(self.scraper.is_timisoara_location("Torontalului, Timisoara"))
         self.assertTrue(self.scraper.is_timisoara_location("Lipovei, Timisoara"))
+        self.assertTrue(self.scraper.is_timisoara_location("Pentru confortul viitorilor chiriasi. Locuinta Circumvalatiunii"))
+        self.assertTrue(self.scraper.is_timisoara_location("Ideal pentru chiriași liniștiți"))
+        self.assertTrue(self.scraper.is_timisoara_location("www.milluu.com/chiriasi - apartament 3 camere Lipovei"))
 
         # False: Other cities or external suburbs
         self.assertFalse(self.scraper.is_timisoara_location("Strada Distribuției, Sibiu, Turnișor"))
