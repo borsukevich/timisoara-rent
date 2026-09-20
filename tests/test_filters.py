@@ -46,6 +46,10 @@ class TestFilters(unittest.TestCase):
         self.assertEqual(self.scraper.extract_price_from_text("Preț 550 euro"), "550 €")
         self.assertEqual(self.scraper.extract_price_from_text("Pret: € 700 fix"), "700 €")
         self.assertEqual(self.scraper.extract_price_from_text("Chirie 3000 lei pe luna"), "600 €")
+        self.assertEqual(self.scraper.extract_price_from_text("<span class='product-price'>450EUR</span>"), "450 €")
+        self.assertEqual(self.scraper.extract_price_from_text("<span class='price'>3.500 lei</span>"), "700 €")
+        self.assertEqual(self.scraper.extract_price_from_text("<div class='price-box'> 550.00 € / luna </div>"), "550 €")
+        self.assertEqual(self.scraper.extract_price_from_text("<p>2 500 RON chirie</p>"), "500 €")
         self.assertEqual(self.scraper.extract_price_from_text("Fără preț specificat"), None)
 
     def test_parse_price_eur(self):

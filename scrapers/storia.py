@@ -222,7 +222,7 @@ class StoriaScraper(BaseScraper):
                         if price_target and str(price_target).isdigit():
                             listing.price = f"{price_target} €"
                         else:
-                            cand = self.extract_price_from_text(f"{listing.title} {listing.description}")
+                            cand = self.extract_price_from_text(f"{listing.title} {listing.description}") or self.extract_price_from_text(r.text)
                             if cand:
                                 listing.price = cand
 

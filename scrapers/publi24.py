@@ -133,11 +133,11 @@ class Publi24Scraper(BaseScraper):
                 elif old_price_el:
                     price = old_price_el.get_text(strip=True)
                 else:
-                    price_el = item.select_one('.article-price') or item.select_one('.price')
+                    price_el = item.select_one('.article-price, .product-price, [class*="price"]')
                     price = price_el.get_text(strip=True) if price_el else ""
 
-                if not price:
-                    price = self.extract_price_from_text(f"{title} {item_text}") or ""
+                if not price or self.parse_price_eur(price) is None:
+                    price = self.extract_price_from_text(f"{title} {item_text}") or self.extract_price_from_text(str(item)) or ""
 
                 # Price filter: strictly 400 - 800 EUR
                 price_eur = self.parse_price_eur(price)
@@ -276,13 +276,13 @@ class Publi24Scraper(BaseScraper):
 
             # 2.5 Extract price from detail page if missing
             if not listing.price or self.parse_price_eur(listing.price) is None:
-                p_el = soup.select_one('.article-price, #price, [itemprop="price"], .price')
+                p_el = soup.select_one('.product-price, .article-price, #price, [itemprop="price"], .price, [class*="price"]')
                 if p_el:
                     cand_p = p_el.get_text(strip=True)
-                    if cand_p:
+                    if cand_p and self.parse_price_eur(cand_p):
                         listing.price = cand_p
                 if not listing.price or self.parse_price_eur(listing.price) is None:
-                    cand_p = self.extract_price_from_text(listing.description)
+                    cand_p = self.extract_price_from_text(listing.description) or self.extract_price_from_text(r.text)
                     if cand_p:
                         listing.price = cand_p
 

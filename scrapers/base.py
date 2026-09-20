@@ -397,22 +397,38 @@ class BaseScraper:
     def extract_price_from_text(self, text: str) -> Optional[str]:
         if not text:
             return None
-        # Clean html entities
         t = html.unescape(text)
-        # Match patterns like: 500 €, 500 EUR, 500 euro, € 500, €500, 2500 lei, 2500 ron
-        m = re.search(r'(?:€\s*([0-9]{3,4})|([0-9]{3,4})\s*(€|eur\b|euro\b|lei\b|ron\b))', t, re.IGNORECASE)
-        if m:
-            val = m.group(1) or m.group(2)
-            curr = (m.group(3) or "€").lower()
-            if val and val.isdigit():
-                num = int(val)
-                if "lei" in curr or "ron" in curr:
-                    eur_val = int(round(num / 5.0))
-                    if 100 <= eur_val <= 5000:
-                        return f"{eur_val} €"
-                else:
-                    if 100 <= num <= 5000:
-                        return f"{num} €"
+
+        # Look for currency symbols and numeric values:
+        # e.g., 450 €, 450EUR, 450 euro, € 450, €450, 450.00 €, 3.500 lei, 2 500 lei, etc.
+        patterns = [
+            r'€\s*([0-9]{1,2}[. ][0-9]{3}|[0-9]{3,4}(?:[.,][0-9]{2})?)',
+            r'([0-9]{1,2}[. ][0-9]{3}|[0-9]{3,4}(?:[.,][0-9]{2})?)\s*(€|eur\b|euro\b|lei\b|ron\b)',
+            r'(?:chirie|pre[tț]|pret|price)[:\s]+([0-9]{1,2}[. ][0-9]{3}|[0-9]{3,4})\b'
+        ]
+
+        candidates = []
+        for pat in patterns:
+            for m in re.finditer(pat, t, re.IGNORECASE):
+                val_str = m.group(1)
+                curr_str = (m.group(2) if m.lastindex and m.lastindex >= 2 else "€").lower()
+                clean_num = re.sub(r'[.,][0-9]{2}$', '', val_str).replace(" ", "").replace(".", "")
+                if clean_num.isdigit():
+                    num = int(clean_num)
+                    if "lei" in curr_str or "ron" in curr_str:
+                        eur_val = int(round(num / 5.0))
+                    else:
+                        eur_val = num
+                    if 250 <= eur_val <= 3000:
+                        candidates.append((eur_val, f"{eur_val} €"))
+
+        if candidates:
+            # If any candidate is in the target 400-800 EUR range, prioritize it!
+            for eur_val, formatted in candidates:
+                if 400 <= eur_val <= 800:
+                    return formatted
+            return candidates[0][1]
+
         return None
 
     def fetch_listings(self) -> List[Listing]:

@@ -80,8 +80,8 @@ class ImobiliareScraper(BaseScraper):
                     price_match = re.search(r'(\d+[\s.]?\d*)\s*€', card.get_text())
                     price = f"{price_match.group(1).replace(' ', '')} €" if price_match else ""
 
-                if not price:
-                    price = self.extract_price_from_text(f"{title} {card.get_text()}") or ""
+                if not price or self.parse_price_eur(price) is None:
+                    price = self.extract_price_from_text(f"{title} {card.get_text()}") or self.extract_price_from_text(str(card)) or ""
 
                 # Price filter: strictly 400 - 800 EUR
                 price_eur = self.parse_price_eur(price)
@@ -272,7 +272,7 @@ class ImobiliareScraper(BaseScraper):
                         if cand_p and self.parse_price_eur(cand_p):
                             listing.price = cand_p
                     if not listing.price or self.parse_price_eur(listing.price) is None:
-                        cand_p = self.extract_price_from_text(content_text)
+                        cand_p = self.extract_price_from_text(content_text) or self.extract_price_from_text(html_text)
                         if cand_p:
                             listing.price = cand_p
 
