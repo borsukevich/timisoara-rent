@@ -5,7 +5,7 @@ import logging
 from typing import List
 from curl_cffi import requests
 from scrapers.base import Listing
-from config import TELEGRAM_BOT_TOKEN
+from config import TELEGRAM_BOT_TOKEN, SOURCES_CONFIG
 from translator import translate_to_russian
 import database
 
@@ -15,7 +15,7 @@ class TelegramNotifier:
     REPLY_KEYBOARD = {
         "keyboard": [
             [{"text": "⭐ Избранные квартиры"}, {"text": "📊 Статистика"}],
-            [{"text": "🔄 Перезапустить поиск"}]
+            [{"text": "🔄 Перезапустить поиск"}, {"text": "🌐 Ссылки поиска"}]
         ],
         "resize_keyboard": True,
         "is_persistent": True
@@ -35,7 +35,8 @@ class TelegramNotifier:
         try:
             commands = [
                 {"command": "favorites", "description": "⭐ Избранные квартиры"},
-                {"command": "reset", "description": "🔄 Сброс и повторный поиск"},
+                {"command": "reset", "description": "🔄 Сброс и тест (по 3 поста)"},
+                {"command": "links", "description": "🌐 Ссылки поиска 5 порталов"},
                 {"command": "stats", "description": "📊 Статистика базы"},
                 {"command": "start", "description": "🚀 Статус / Запуск мониторинга"}
             ]
@@ -390,6 +391,19 @@ class TelegramNotifier:
         )
         self.send_text_message(chat_id, msg, reply_markup=self.REPLY_KEYBOARD)
 
+    def send_links(self, chat_id: int):
+        msg = (
+            "🌐 <b>Целевые ссылки поиска на 5 порталах:</b>\n"
+            "<i>(Параметры: 3+ комн., 400–800 €, от 55 м², север/центр Тимишоары)</i>\n\n"
+            f"1️⃣ <b>OLX.ro:</b>\n{SOURCES_CONFIG['olx']['url']}\n\n"
+            f"2️⃣ <b>Storia.ro:</b>\n{SOURCES_CONFIG['storia']['url']}\n\n"
+            f"3️⃣ <b>Imobiliare.ro:</b>\n{SOURCES_CONFIG['imobiliare']['url']}\n\n"
+            f"4️⃣ <b>Publi24.ro:</b>\n{SOURCES_CONFIG['publi24']['url']}\n\n"
+            f"5️⃣ <b>Rentola.ro:</b>\n{SOURCES_CONFIG['rentola']['url']}\n\n"
+            "💡 <i>Вы можете открыть любую ссылку в браузере, чтобы сравнить выдачу сайта с сообщениями бота.</i>"
+        )
+        self.send_text_message(chat_id, msg, reply_markup=self.REPLY_KEYBOARD)
+
     def poll_updates_once(self, offset: int = 0, on_start_command=None, on_reset_command=None) -> int:
         """Polls Telegram for commands, callback buttons and registers new subscribers."""
         if not self.token:
@@ -492,6 +506,9 @@ class TelegramNotifier:
                     elif t_lower.startswith("/stats") or "статистик" in t_lower:
                         logger.info(f"[Telegram] Stats triggered by {chat_id} (@{username})")
                         self.send_stats(chat_id)
+                    elif t_lower.startswith("/links") or t_lower.startswith("/sources") or "ссылк" in t_lower or "сайты" in t_lower:
+                        logger.info(f"[Telegram] Links triggered by {chat_id} (@{username})")
+                        self.send_links(chat_id)
                     else:
                         logger.info(f"[Telegram] Unrecognized command from {chat_id} (@{username}): '{text}'")
                         self.send_text_message(

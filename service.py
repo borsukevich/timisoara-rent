@@ -94,16 +94,16 @@ class RentalScannerService:
             return
 
         intro_msg = (
-            "🚀 <b>Запускаю полное сканирование!</b>\n\n"
-            "Сейчас соберу и отправлю вам <b>все актуальные объявления за день</b> со всех 5 площадок "
+            "🚀 <b>Запускаю сканирование!</b>\n\n"
+            "Сейчас соберу и отправлю вам по <b>3 последних актуальных объявления</b> с каждой из 5 площадок "
             "(OLX, Storia, Imobiliare, Publi24, Rentola) с полным описанием без сокращений, точной квадратурой, этажом, ЖК, паркингом и метками на карте.\n\n"
-            "⏳ <i>Это займет около 1–2 минут (отправляю порциями, чтобы не сработал спам-фильтр Telegram)...</i>"
+            "⏳ <i>Это займет около 30–45 секунд...</i>"
         )
         self.notifier.send_text_message(chat_id, intro_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
         threading.Thread(target=self.run_export, args=(chat_id,), daemon=True, name="ExportThread").start()
 
     def on_reset_command(self, chat_id: int):
-        """When user sends /reset or taps '🔄 Перезапустить поиск': clear seen history and run fresh export."""
+        """When user sends /reset or taps '🔄 Перезапустить поиск': clear seen history and run fresh export of 3 posts per source."""
         if self.is_exporting_initial:
             self.notifier.send_text_message(chat_id, "⏳ Выгрузка уже выполняется, пожалуйста, подождите...")
             return
@@ -112,10 +112,10 @@ class RentalScannerService:
         database.reset_seen_listings()
 
         reset_msg = (
-            "🔄 <b>База поиска успешно сброшена!</b>\n\n"
-            "Запускаю повторный сбор всех актуальных объявлений за день со всех 5 площадок "
-            "(OLX, Storia, Imobiliare, Publi24, Rentola - без ограничений по годам, с кнопками «⭐ В избранное» и каждой характеристикой на новой строке).\n\n"
-            "⏳ <i>Пожалуйста, подождите 1–2 минуты...</i>"
+            "🔄 <b>База поиска полностью очищена!</b>\n\n"
+            "Запускаю контрольную выгрузку: по <b>3 последних объявления</b> с каждой из 5 площадок "
+            "(OLX, Storia, Imobiliare, Publi24, Rentola), чтобы вы могли убедиться в корректной работе каждого источника.\n\n"
+            "⏳ <i>Пожалуйста, подождите около 30–45 секунд...</i>"
         )
         self.notifier.send_text_message(chat_id, reset_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
         threading.Thread(target=self.run_export, args=(chat_id,), daemon=True, name="ExportThread").start()
@@ -130,28 +130,47 @@ class RentalScannerService:
                 try:
                     listings = scraper.fetch_listings()
                     organic_items = [l for l in listings if not l.is_promoted]
-                    top_items = organic_items[:30]
-                    logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for {chat_id}...")
+                    logger.info(f"[{scraper.name}] Processing {len(organic_items)} organic listings for {chat_id} (target: up to 3 posts)...")
 
-                    for listing in reversed(top_items):
-                        if hasattr(scraper, "enrich_listing_details"):
-                            enriched = scraper.enrich_listing_details(listing)
-                            if not enriched:
+                    qualified_to_send = []
+                    remaining_to_seed = []
+
+                    for listing in organic_items:
+                        if len(qualified_to_send) < 3:
+                            price_eur = scraper.parse_price_eur(listing.price)
+                            if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
+                                remaining_to_seed.append(listing)
                                 continue
-                            listing = enriched
 
-                        # Strict Timișoara check
-                        full_loc = f"{listing.title} {listing.district} {listing.full_address}"
-                        if not scraper.is_timisoara_location(full_loc):
-                            logger.info(f"🚫 [{listing.source}] Excluded: Не в Тимишоаре | {listing.title}")
-                            continue
+                            if hasattr(scraper, "enrich_listing_details"):
+                                enriched = scraper.enrich_listing_details(listing)
+                                if not enriched:
+                                    remaining_to_seed.append(listing)
+                                    continue
+                                listing = enriched
 
-                        # Strict price check: MUST have valid price in 400 - 800 EUR range
-                        price_eur = scraper.parse_price_eur(listing.price)
-                        if price_eur is None or price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800):
-                            logger.info(f"🚫 [{listing.source}] Excluded: Нет цены 400-800 EUR ('{listing.price}') | {listing.title}")
-                            continue
+                            # Strict Timișoara check
+                            full_loc = f"{listing.title} {listing.district} {listing.full_address}"
+                            if not scraper.is_timisoara_location(full_loc):
+                                logger.info(f"🚫 [{listing.source}] Excluded: Не в Тимишоаре | {listing.title}")
+                                remaining_to_seed.append(listing)
+                                continue
 
+                            # Strict price check: MUST have valid price in 400 - 800 EUR range
+                            price_eur = scraper.parse_price_eur(listing.price)
+                            if price_eur is None or price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800):
+                                logger.info(f"🚫 [{listing.source}] Excluded: Нет цены 400-800 EUR ('{listing.price}') | {listing.title}")
+                                remaining_to_seed.append(listing)
+                                continue
+
+                            qualified_to_send.append(listing)
+                        else:
+                            remaining_to_seed.append(listing)
+
+                    logger.info(f"[{scraper.name}] Sending {len(qualified_to_send)} qualified posts to {chat_id}...")
+
+                    # Send qualified listings in reverse order so the newest appears last
+                    for listing in reversed(qualified_to_send):
                         ok = self.notifier.send_listing(chat_id, listing)
                         if ok:
                             sent_count += 1
@@ -163,12 +182,10 @@ class RentalScannerService:
                                 url=listing.url,
                                 sent=1
                             )
-                        # Safe interval between apartments
                         time.sleep(1.0)
 
-                    # Mark remaining existing organic items from page 1 as seen
-                    # so they will not be treated as "new" in subsequent scans
-                    for listing in organic_items[30:]:
+                    # Mark remaining organic items as seen (sent=0) so subsequent scan cycles don't spam
+                    for listing in remaining_to_seed:
                         database.mark_listing_seen(
                             uid=listing.uid,
                             source=listing.source,
@@ -177,6 +194,18 @@ class RentalScannerService:
                             url=listing.url,
                             sent=0
                         )
+
+                    # Mark promoted listings as seen (sent=0)
+                    for listing in listings:
+                        if listing.is_promoted:
+                            database.mark_listing_seen(
+                                uid=listing.uid,
+                                source=listing.source,
+                                title=listing.title,
+                                price=listing.price,
+                                url=listing.url,
+                                sent=0
+                            )
                 except Exception as e:
                     logger.error(f"Error during export for {scraper.name}: {e}", exc_info=True)
 
@@ -184,10 +213,10 @@ class RentalScannerService:
             database.mark_user_initial_received(chat_id)
 
             finish_msg = (
-                f"✅ <b>Выгрузка за сегодня завершена!</b>\n"
-                f"Отправлено актуальных вариантов: <b>{sent_count}</b>.\n\n"
+                f"✅ <b>Контрольная выгрузка завершена!</b>\n"
+                f"Отправлено актуальных вариантов: <b>{sent_count}</b> (по 3 последних с каждого из 5 порталов).\n\n"
                 f"📡 <b>Мониторинг активен:</b> теперь каждые 3 минуты бот проверяет все площадки и будет "
-                f"присылать только свежие варианты сразу после их публикации!"
+                f"присылать только новые варианты сразу после их публикации!"
             )
             self.notifier.send_text_message(chat_id, finish_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
             logger.info(f"Export completed. Sent {sent_count} listings to {chat_id}.")
