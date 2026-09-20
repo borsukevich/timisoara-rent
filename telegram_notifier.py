@@ -64,7 +64,7 @@ class TelegramNotifier:
         title_escaped = html.escape(title_ru)
         
         price_escaped = html.escape(listing.price or "Уточняйте").replace("&lt;s&gt;", "<s>").replace("&lt;/s&gt;", "</s>")
-        rooms_escaped = html.escape(listing.rooms or "3+ камеры")
+        rooms_escaped = html.escape(listing.rooms or "3 camere")
         area_escaped = html.escape(listing.exact_area or "от 55 м²")
         floor_escaped = html.escape(listing.floor or "Не указан")
         district_escaped = html.escape(listing.district or "Тимишоара")

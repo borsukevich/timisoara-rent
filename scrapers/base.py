@@ -24,7 +24,7 @@ class Listing:
     balcony_info: str = "Не указан"
     deposit_info: str = "1 месяц (обычно)"
     commission_info: str = "Уточнять"
-    building_type: str = "Обычный дом"
+    building_type: str = "Обычный фонд"
     map_link: str = ""
     description: str = ""
     photos: List[str] = field(default_factory=list)
@@ -253,11 +253,13 @@ class BaseScraper:
             if key in t:
                 return name
 
-        m = re.search(r'(?:complexul|ansamblul|rezidential|proiectul)\s+([A-Z][a-zA-Z0-9\s-]{2,20})', text, re.IGNORECASE)
+        m = re.search(r'(?:complexul|ansamblul|rezidential|proiectul)\s+([A-Za-z0-9\s-]{2,30})', text, re.IGNORECASE)
         if m:
-            candidate = m.group(1).strip()
-            if candidate.lower() not in ["nou", "rezidential", "timisoara", "inchis"]:
-                return candidate
+            candidate = m.group(1).strip(' ,.-')
+            cand_l = candidate.lower()
+            if not any(k in cand_l for k in ["comercial", "shopping", "studentesc", "studențesc", "sportiv", "nou", "rezidential", "timisoara", "inchis"]):
+                if len(candidate) >= 3:
+                    return candidate
 
         return "Не указан"
 
@@ -297,8 +299,12 @@ class BaseScraper:
         if lat and lon and lat != 0 and lon != 0:
             return f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
         if address:
-            query = f"{address}, Timisoara, Romania"
-            return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote_plus(query)}"
+            clean_addr = address.strip(' ,.')
+            if not re.search(r'timi[sș]oara', clean_addr, re.I):
+                clean_addr = f"{clean_addr}, Timișoara"
+            if not re.search(r'romania', clean_addr, re.I):
+                clean_addr = f"{clean_addr}, Romania"
+            return f"https://www.google.com/maps/search/?api=1&query={urllib.parse.quote_plus(clean_addr)}"
         return "https://www.google.com/maps/search/?api=1&query=Timisoara"
 
     def clean_html(self, raw_html: str) -> str:
