@@ -138,6 +138,49 @@ class TestFilters(unittest.TestCase):
         self.assertEqual(cand_p, "490 EUR")
         self.assertEqual(self.scraper.parse_price_eur(cand_p), 490.0)
 
+    def test_rentola_scraper(self):
+        from scrapers.rentola import RentolaScraper
+        from bs4 import BeautifulSoup
+        import re
+
+        scraper = RentolaScraper("https://rentola.ro/en/for-rent?location=timisoara")
+
+        # Test South vs North/Central zone filtering
+        self.assertIsNotNone(scraper.is_south_zone("Apartament 3 camere zona Girocului"))
+        self.assertIsNotNone(scraper.is_south_zone("Apartament Calea Sagului"))
+        self.assertIsNone(scraper.is_south_zone("Apartament Calea Torontalului"))
+        self.assertIsNone(scraper.is_south_zone("Apartament zona Lipovei"))
+
+        # Test tile extraction
+        tile_html = """
+        <div data-testid="propertyTile" class="relative flex overflow-hidden rounded-xl">
+            <a href="/en/listings/apartament-cu-3-camere-in-torontalului-p9e6f6e">
+                <p class="text-base font-medium text-blue-300">3 bedrooms apartment of 75.0 m²</p>
+            </a>
+            <p class="text-grey-400">Torontalului, Timișoara</p>
+            <p class="text-base font-bold text-blue-300">570 € / month</p>
+            <img src="https://img2.rentola.com/SAP6eD5GbMOnIR8kmM-Ix0t3AZs=/filters:format(webp)/https%3A%2F%2Foxia.ro%2Fwp-content%2Fuploads%2F2026%2F09%2Fapartament-cu-3-camere-in-piata-balcescu-1.webp" />
+        </div>
+        """
+        soup = BeautifulSoup(tile_html, "html.parser")
+        tile = soup.select_one('[data-testid="propertyTile"]')
+        self.assertIsNotNone(tile)
+
+        price_p = tile.select_one('p.text-base.font-bold.text-blue-300')
+        self.assertIsNotNone(price_p)
+        price = re.sub(r'\s*/\s*month', '', price_p.get_text(strip=True)).strip()
+        self.assertEqual(price, "570 €")
+        self.assertEqual(scraper.parse_price_eur(price), 570.0)
+
+        # Image unquoting
+        img = tile.select_one('img')
+        src = img.get('src')
+        import urllib.parse
+        m_orig = re.search(r'https%3A%2F%2F[^\s&]+', src)
+        self.assertIsNotNone(m_orig)
+        orig_url = urllib.parse.unquote(m_orig.group(0))
+        self.assertTrue(orig_url.startswith("https://oxia.ro/"))
+
 if __name__ == "__main__":
     unittest.main()
 

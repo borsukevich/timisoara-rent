@@ -3,6 +3,7 @@ from scrapers.olx import OLXScraper
 from scrapers.storia import StoriaScraper
 from scrapers.imobiliare import ImobiliareScraper
 from scrapers.publi24 import Publi24Scraper
+from scrapers.rentola import RentolaScraper
 
 __all__ = [
     "Listing",
@@ -11,5 +12,6 @@ __all__ = [
     "StoriaScraper",
     "ImobiliareScraper",
     "Publi24Scraper",
+    "RentolaScraper",
 ]
 

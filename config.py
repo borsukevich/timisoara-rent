@@ -36,6 +36,11 @@ SOURCES_CONFIG = {
         "url": "https://www.publi24.ro/anunturi/imobiliare/de-inchiriat/apartamente/apartamente-3-camere/timis/timisoara/?livingspace=50-&minprice=400&maxprice=800&sort=date_desc",
         "name": "Publi24.ro",
         "max_items": 20
+    },
+    "rentola": {
+        "url": "https://rentola.ro/en/for-rent?location=timisoara&order=desc&property_types=apartment&rent=400-800&size=55&rooms=3",
+        "name": "Rentola.ro",
+        "max_items": 20
     }
 }
 

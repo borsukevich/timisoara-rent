@@ -11,7 +11,8 @@ from scrapers import (
     OLXScraper,
     StoriaScraper,
     ImobiliareScraper,
-    Publi24Scraper
+    Publi24Scraper,
+    RentolaScraper,
 )
 import collections
 from telegram_notifier import TelegramNotifier
@@ -45,12 +46,13 @@ class RentalScannerService:
         self.update_offset = 0
         self.is_exporting_initial = False
 
-        # Initialize scrapers with configured URLs (Imobiliare.ro + Storia.ro + Publi24.ro + OLX.ro)
+        # Initialize scrapers with configured URLs (Imobiliare.ro + Storia.ro + Publi24.ro + OLX.ro + Rentola.ro)
         self.scrapers = [
             ImobiliareScraper(config.SOURCES_CONFIG["imobiliare"]["url"]),
             StoriaScraper(config.SOURCES_CONFIG["storia"]["url"]),
             Publi24Scraper(config.SOURCES_CONFIG["publi24"]["url"]),
             OLXScraper(config.SOURCES_CONFIG["olx"]["url"]),
+            RentolaScraper(config.SOURCES_CONFIG["rentola"]["url"]),
         ]
 
         # Seed initial state if DB is completely empty (cold-start protection against cloud spam)
@@ -93,8 +95,8 @@ class RentalScannerService:
 
         intro_msg = (
             "🚀 <b>Запускаю полное сканирование!</b>\n\n"
-            "Сейчас соберу и отправлю вам <b>все актуальные объявления за день</b> со всех 4 площадок "
-            "(OLX, Storia, Imobiliare, Publi24) с полным описанием без сокращений, точной квадратурой, этажом, ЖК, паркингом и метками на карте.\n\n"
+            "Сейчас соберу и отправлю вам <b>все актуальные объявления за день</b> со всех 5 площадок "
+            "(OLX, Storia, Imobiliare, Publi24, Rentola) с полным описанием без сокращений, точной квадратурой, этажом, ЖК, паркингом и метками на карте.\n\n"
             "⏳ <i>Это займет около 1–2 минут (отправляю порциями, чтобы не сработал спам-фильтр Telegram)...</i>"
         )
         self.notifier.send_text_message(chat_id, intro_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
@@ -111,8 +113,8 @@ class RentalScannerService:
 
         reset_msg = (
             "🔄 <b>База поиска успешно сброшена!</b>\n\n"
-            "Запускаю повторный сбор всех актуальных объявлений за день со всех 4 площадок "
-            "(без ограничений по годам, с кнопками «⭐ В избранное» и каждой характеристикой на новой строке).\n\n"
+            "Запускаю повторный сбор всех актуальных объявлений за день со всех 5 площадок "
+            "(OLX, Storia, Imobiliare, Publi24, Rentola - без ограничений по годам, с кнопками «⭐ В избранное» и каждой характеристикой на новой строке).\n\n"
             "⏳ <i>Пожалуйста, подождите 1–2 минуты...</i>"
         )
         self.notifier.send_text_message(chat_id, reset_msg, reply_markup=self.notifier.REPLY_KEYBOARD)
