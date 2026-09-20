@@ -395,7 +395,7 @@ class TelegramNotifier:
         if not self.token:
             return offset
         try:
-            r = requests.get(f"{self.base_url}/getUpdates", params={"offset": offset, "timeout": 2}, timeout=5)
+            r = requests.get(f"{self.base_url}/getUpdates", params={"offset": offset, "timeout": 1}, timeout=10)
             if r.status_code != 200:
                 return offset
 
@@ -504,6 +504,10 @@ class TelegramNotifier:
 
             return offset
         except Exception as e:
-            logger.error(f"[Telegram] Error polling updates: {e}", exc_info=True)
+            err_str = str(e).lower()
+            if "timed out" in err_str or "timeout" in err_str:
+                # Normal polling timeout when idle
+                return offset
+            logger.error(f"[Telegram] Error polling updates: {e}")
             sys.stdout.flush()
             return offset

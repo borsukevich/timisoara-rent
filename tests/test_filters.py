@@ -33,6 +33,13 @@ class TestFilters(unittest.TestCase):
         self.assertFalse(self.scraper.is_timisoara_location("Lugoj, Timis"))
         self.assertFalse(self.scraper.is_timisoara_location("Comuna Sag, Timis"))
         self.assertFalse(self.scraper.is_timisoara_location("Bucuresti, Sector 1"))
+        self.assertFalse(self.scraper.is_timisoara_location("Apart 3 cam langa metrou"))
+        self.assertFalse(self.scraper.is_timisoara_location("Lux! Apartament cu 3 camere in Selimbar pe Doamna Stanca"))
+        self.assertFalse(self.scraper.is_timisoara_location("Apartament cu 3 camere in Sibiu pe Strada Distribuției"))
+        self.assertFalse(self.scraper.is_timisoara_location("Apartament cu 3 camere, bloc nou, Coresi"))
+        self.assertFalse(self.scraper.is_timisoara_location("Aparatorii Patriei Ap 3 Camere Mobilat de Inchiriat"))
+        self.assertFalse(self.scraper.is_timisoara_location("Titan, Galeriile Titan, Metrou"))
+        self.assertFalse(self.scraper.is_timisoara_location("3 camere între metrou Unirii și Tineretului, Parcul Carol, Bd Marasesti, nr 42"))
 
     def test_extract_price_from_text(self):
         self.assertEqual(self.scraper.extract_price_from_text("Chirie 650 €/lună"), "650 €")
@@ -66,3 +73,4 @@ class TestFilters(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
