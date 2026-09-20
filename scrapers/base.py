@@ -370,5 +370,46 @@ class BaseScraper:
         except Exception:
             return None
 
+    def is_timisoara_location(self, text: str) -> bool:
+        """Returns False if location or text indicates another city/suburb outside Timișoara."""
+        if not text:
+            return True
+        t = text.lower()
+        # Other cities or external suburbs outside Timișoara
+        excluded_locations = [
+            r'sibiu\b', r'cluj\b', r'arad\b', r'bucure[sș]ti\b', r'oradea\b', r'bra[sș]ov\b',
+            r'ia[sș]i\b', r'craiova\b', r'constan[tț]a\b', r'lugoj\b', r'buzia[sș]\b',
+            r's[aâ]nnicolau\b', r'jimbolia\b', r'f[aă]get\b', r'deta\b', r'giroc\b',
+            r'chi[sș]oda\b', r'dumbr[aă]vi[tț]a\b', r'mo[sș]ni[tț]a\b', r'ghiroda\b',
+            r's[aă]c[aă]laz\b', r's[aâ]nandrei\b', r'\b[sș]ag\b', r'remetea\b', r'peciu\b',
+            r's[aâ]nmihaiu\b', r'giarmata\b', r'orti[sș]oara\b', r'reca[sș]\b', r'g[aă]taia\b',
+            r'covaci\b', r'utvin\b', r'carani\b', r'beregs[aă]u\b'
+        ]
+        for pat in excluded_locations:
+            if re.search(pat, t):
+                return False
+        return True
+
+    def extract_price_from_text(self, text: str) -> Optional[str]:
+        if not text:
+            return None
+        # Clean html entities
+        t = html.unescape(text)
+        # Match patterns like: 500 €, 500 EUR, 500 euro, € 500, €500, 2500 lei, 2500 ron
+        m = re.search(r'(?:€\s*([0-9]{3,4})|([0-9]{3,4})\s*(€|eur\b|euro\b|lei\b|ron\b))', t, re.IGNORECASE)
+        if m:
+            val = m.group(1) or m.group(2)
+            curr = (m.group(3) or "€").lower()
+            if val and val.isdigit():
+                num = int(val)
+                if "lei" in curr or "ron" in curr:
+                    eur_val = int(round(num / 5.0))
+                    if 100 <= eur_val <= 5000:
+                        return f"{eur_val} €"
+                else:
+                    if 100 <= num <= 5000:
+                        return f"{num} €"
+        return None
+
     def fetch_listings(self) -> List[Listing]:
         raise NotImplementedError

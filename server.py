@@ -38,6 +38,15 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif self.path in ["/logs", "/log"]:
+            from service import LOG_BUFFER
+            logs_text = "\n".join(LOG_BUFFER) if LOG_BUFFER else "No logs recorded yet."
+            body = logs_text.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self.send_response(404)
             self.end_headers()

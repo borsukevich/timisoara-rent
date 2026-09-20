@@ -11,5 +11,5 @@ services:
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: TELEGRAM_BOT_TOKEN
-        value: 8903183307:AAGNYo9gBNTVSTV9AferFGkDK0hLP4ykxIc
+        sync: false
 

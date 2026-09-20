@@ -113,6 +113,12 @@ class OLXScraper(BaseScraper):
 
                 # Location & District
                 loc = ad.get("location", {})
+                city = (loc.get("cityName") or "").strip()
+                if city and not self.is_timisoara_location(city):
+                    continue
+                if not self.is_timisoara_location(title):
+                    continue
+
                 district = loc.get("districtName")
                 if not district or district.lower() in ["timisoara", "timișoara"]:
                     loc_m = re.search(r'(?:zona|în)\s+([A-Za-zĂÎÂȘȚăîâșț\s-]+)', title, re.IGNORECASE)
@@ -125,6 +131,9 @@ class OLXScraper(BaseScraper):
 
                 # Geographic Filter: Only exclude if an unwanted zone is EXPLICITLY mentioned
                 full_text = f"{title} {district} {desc}"
+                if not self.is_timisoara_location(full_text):
+                    continue
+
                 excluded_match = self.is_explicitly_excluded(full_text, context=title)
                 exclusion_reason = None
                 if excluded_match:
@@ -132,11 +141,18 @@ class OLXScraper(BaseScraper):
 
                 # Price
                 price_obj = ad.get("price", {})
-                price = price_obj.get("displayValue", "")
-                if not price and "regularPrice" in price_obj:
+                display_val = price_obj.get("displayValue", "")
+                if display_val:
+                    price = display_val.replace("â\x82¬", "€").replace("\xa0", " ").strip()
+                elif "regularPrice" in price_obj:
                     val = price_obj["regularPrice"].get("value")
                     curr = price_obj["regularPrice"].get("currencyCode", "EUR")
                     price = f"{val} {curr}"
+                else:
+                    price = self.extract_price_from_text(full_text) or ""
+
+                if not price:
+                    price = self.extract_price_from_text(full_text) or ""
 
                 # Price filter: strictly 400 - 800 EUR
                 price_eur = self.parse_price_eur(price)
@@ -284,4 +300,12 @@ class OLXScraper(BaseScraper):
 
     def enrich_listing_details(self, listing: Listing) -> Optional[Listing]:
         """OLX already provides full specs, descriptions and HD galleries in native JSON."""
+        full_text = f"{listing.title} {listing.district} {listing.description}"
+        if not self.is_timisoara_location(full_text):
+            listing.exclusion_reason = "Не в Тимишоаре"
+            return None
+        if not listing.price or self.parse_price_eur(listing.price) is None:
+            cand = self.extract_price_from_text(full_text)
+            if cand:
+                listing.price = cand
         return listing

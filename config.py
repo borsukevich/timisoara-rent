@@ -1,7 +1,7 @@
 import os
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8903183307:AAGNYo9gBNTVSTV9AferFGkDK0hLP4ykxIc")
-TELEGRAM_BOT_USERNAME = "misha_smc_trade_bot"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "timisoara_rent_bot")
 
 # Polling interval in seconds (between scans)
 SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "180"))  # 3 minutes

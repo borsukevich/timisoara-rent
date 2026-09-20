@@ -50,6 +50,9 @@ class StoriaScraper(BaseScraper):
                 price_curr = tp.get("currency", "EUR")
                 price = f"{price_val} {price_curr}" if price_val else ""
 
+                if not price:
+                    price = self.extract_price_from_text(f"{title} {item.get('shortDescription') or ''}") or ""
+
                 # Price filter: strictly 400 - 800 EUR
                 price_eur = self.parse_price_eur(price)
                 if price_eur is not None and (price_eur < 400 or price_eur > 800):
@@ -72,11 +75,21 @@ class StoriaScraper(BaseScraper):
                 loc_obj = item.get("location") or {}
                 rev_geo = loc_obj.get("reverseGeocoding") or {}
                 locations_list = rev_geo.get("locations") or []
+                city = ""
                 district = "Timișoara"
                 for l in locations_list:
-                    if isinstance(l, dict) and l.get("locationLevel") == "district":
-                        district = l.get("name")
-                        break
+                    if isinstance(l, dict):
+                        if l.get("locationLevel") == "city":
+                            city = l.get("name") or ""
+                        elif l.get("locationLevel") == "district":
+                            district = l.get("name") or ""
+
+                if city and not self.is_timisoara_location(city):
+                    continue
+                if not self.is_timisoara_location(district):
+                    continue
+                if not self.is_timisoara_location(title):
+                    continue
 
                 addr_obj = loc_obj.get("address") or {}
                 street_obj = addr_obj.get("street") or {}
@@ -186,12 +199,32 @@ class StoriaScraper(BaseScraper):
                     data = json.loads(next_data.string)
                     ad = data.get("props", {}).get("pageProps", {}).get("ad") or {}
 
+                    target = ad.get("target") or {}
+                    target_city = (target.get("City") or "").strip()
+                    if target_city and not self.is_timisoara_location(target_city):
+                        listing.exclusion_reason = f"Другой город: {target_city}"
+                        return None
+
                     # 1. Full description
                     raw_desc = ad.get("description", "")
                     if raw_desc:
                         full_desc = self.clean_html(raw_desc)
                         if full_desc:
                             listing.description = full_desc
+
+                    if not self.is_timisoara_location(f"{listing.title} {listing.description}"):
+                        listing.exclusion_reason = "Описание указывает на другой город/пригород"
+                        return None
+
+                    # Fallback price extraction
+                    if not listing.price or self.parse_price_eur(listing.price) is None:
+                        price_target = target.get("Price")
+                        if price_target and str(price_target).isdigit():
+                            listing.price = f"{price_target} €"
+                        else:
+                            cand = self.extract_price_from_text(f"{listing.title} {listing.description}")
+                            if cand:
+                                listing.price = cand
 
                     # 2. Photos: get all high-resolution photos
                     images = ad.get("images", [])

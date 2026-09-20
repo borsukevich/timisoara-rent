@@ -24,9 +24,14 @@ class TelegramNotifier:
     def __init__(self, token: str = TELEGRAM_BOT_TOKEN):
         self.token = token
         self.base_url = f"https://api.telegram.org/bot{self.token}"
-        self.setup_bot_commands()
+        if not self.token:
+            logger.warning("⚠️ TELEGRAM_BOT_TOKEN is not set! Set the TELEGRAM_BOT_TOKEN environment variable.")
+        else:
+            self.setup_bot_commands()
 
     def setup_bot_commands(self):
+        if not self.token:
+            return
         try:
             commands = [
                 {"command": "favorites", "description": "⭐ Избранные квартиры"},
@@ -141,6 +146,8 @@ class TelegramNotifier:
         return caption
 
     def send_listing(self, chat_id: int, listing: Listing) -> bool:
+        if not self.token:
+            return False
         caption = self.format_caption(listing)
         photos = [p for p in listing.photos if p and p.startswith("http")]
         sent_ok = False
@@ -264,6 +271,8 @@ class TelegramNotifier:
         return success_count
 
     def send_text_message(self, chat_id: int, text: str, reply_markup: dict = None) -> bool:
+        if not self.token:
+            return False
         try:
             payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
             if reply_markup:
@@ -383,6 +392,8 @@ class TelegramNotifier:
 
     def poll_updates_once(self, offset: int = 0, on_start_command=None, on_reset_command=None) -> int:
         """Polls Telegram for commands, callback buttons and registers new subscribers."""
+        if not self.token:
+            return offset
         try:
             r = requests.get(f"{self.base_url}/getUpdates", params={"offset": offset, "timeout": 2}, timeout=5)
             if r.status_code != 200:

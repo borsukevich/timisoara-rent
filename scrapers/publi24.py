@@ -112,6 +112,14 @@ class Publi24Scraper(BaseScraper):
                     # Skip South zones (outside user map polygon)
                     continue
 
+                # Check city / location on card
+                loc_el = item.select_one('.article-location, [class*="location"]')
+                loc_text = loc_el.get_text(strip=True) if loc_el else ""
+                if loc_text and not self.is_timisoara_location(loc_text):
+                    continue
+                if not self.is_timisoara_location(title):
+                    continue
+
                 # 4. Extract price (show both new and old price if discounted)
                 new_price_el = item.select_one('.new-price')
                 old_price_el = item.select_one('.old-price')
@@ -127,6 +135,9 @@ class Publi24Scraper(BaseScraper):
                 else:
                     price_el = item.select_one('.article-price') or item.select_one('.price')
                     price = price_el.get_text(strip=True) if price_el else ""
+
+                if not price:
+                    price = self.extract_price_from_text(f"{title} {item_text}") or ""
 
                 # Price filter: strictly 400 - 800 EUR
                 price_eur = self.parse_price_eur(price)
@@ -230,7 +241,12 @@ class Publi24Scraper(BaseScraper):
 
             soup = BeautifulSoup(r.text, "html.parser")
 
-            # 1. Check detail page district tag (e.g. ?area=dacia)
+            # 1. Check detail page district and city tags
+            breadcrumbs_text = " ".join([b.get_text(strip=True) for b in soup.select('.breadcrumb, .breadcrumbs, [itemprop="breadcrumb"], .article-location')])
+            if breadcrumbs_text and not self.is_timisoara_location(breadcrumbs_text):
+                listing.exclusion_reason = f"Другой город: '{breadcrumbs_text}'"
+                return None
+
             area_links = soup.select('a[href*="area="]')
             for al in area_links:
                 area_name = al.get_text(strip=True)
@@ -247,11 +263,28 @@ class Publi24Scraper(BaseScraper):
             if desc_el:
                 listing.description = self.clean_html(desc_el.get_text())
 
-            # Check full text for any South mentions
-            south_m = self.is_south_zone(f"{listing.title} {listing.description}", context=listing.title)
+            # Check full text for any South mentions or other cities
+            full_content = f"{listing.title} {listing.description}"
+            if not self.is_timisoara_location(full_content):
+                listing.exclusion_reason = "Описание указывает на другой город/пригород"
+                return None
+
+            south_m = self.is_south_zone(full_content, context=listing.title)
             if south_m:
                 listing.exclusion_reason = f"Южный район в описании: '{south_m}'"
                 return None
+
+            # 2.5 Extract price from detail page if missing
+            if not listing.price or self.parse_price_eur(listing.price) is None:
+                p_el = soup.select_one('.article-price, #price, [itemprop="price"], .price')
+                if p_el:
+                    cand_p = p_el.get_text(strip=True)
+                    if cand_p:
+                        listing.price = cand_p
+                if not listing.price or self.parse_price_eur(listing.price) is None:
+                    cand_p = self.extract_price_from_text(listing.description)
+                    if cand_p:
+                        listing.price = cand_p
 
             # 3. High-res photo extraction via native imageList.push script (2000x1500)
             images_from_script = re.findall(r"imageList\.push\(\{\s*src:\s*'(https://[^']+)'", r.text)

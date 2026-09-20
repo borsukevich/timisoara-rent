@@ -13,7 +13,18 @@ from scrapers import (
     ImobiliareScraper,
     Publi24Scraper
 )
+import collections
 from telegram_notifier import TelegramNotifier
+
+LOG_BUFFER = collections.deque(maxlen=400)
+
+class DequeHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            LOG_BUFFER.append(msg)
+        except Exception:
+            pass
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +33,10 @@ logging.basicConfig(
     stream=sys.stdout
 )
 logger = logging.getLogger("TimisoaraRent")
+
+deque_handler = DequeHandler()
+deque_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+logging.getLogger().addHandler(deque_handler)
 
 class RentalScannerService:
     def __init__(self):
@@ -117,15 +132,23 @@ class RentalScannerService:
                     logger.info(f"[{scraper.name}] Exporting {len(top_items)} organic listings for {chat_id}...")
 
                     for listing in reversed(top_items):
-                        price_eur = scraper.parse_price_eur(listing.price)
-                        if price_eur is not None and (price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800)):
-                            continue
-
                         if hasattr(scraper, "enrich_listing_details"):
                             enriched = scraper.enrich_listing_details(listing)
                             if not enriched:
                                 continue
                             listing = enriched
+
+                        # Strict Timișoara check
+                        full_loc = f"{listing.title} {listing.district} {listing.full_address}"
+                        if not scraper.is_timisoara_location(full_loc):
+                            logger.info(f"🚫 [{listing.source}] Excluded: Не в Тимишоаре | {listing.title}")
+                            continue
+
+                        # Strict price check: MUST have valid price in 400 - 800 EUR range
+                        price_eur = scraper.parse_price_eur(listing.price)
+                        if price_eur is None or price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800):
+                            logger.info(f"🚫 [{listing.source}] Excluded: Нет цены 400-800 EUR ('{listing.price}') | {listing.title}")
+                            continue
 
                         ok = self.notifier.send_listing(chat_id, listing)
                         if ok:
@@ -233,6 +256,34 @@ class RentalScannerService:
                         )
                         continue
                     listing = enriched
+
+                # Strict Timișoara check
+                full_loc = f"{listing.title} {listing.district} {listing.full_address}"
+                if not scraper.is_timisoara_location(full_loc):
+                    logger.info(f"🚫 [{listing.source}] Excluded: Не в Тимишоаре | {listing.title}")
+                    database.mark_listing_seen(
+                        uid=listing.uid,
+                        source=listing.source,
+                        title=listing.title,
+                        price=listing.price,
+                        url=listing.url,
+                        sent=0
+                    )
+                    continue
+
+                # Strict price check: MUST have valid price in 400 - 800 EUR range
+                price_eur = scraper.parse_price_eur(listing.price)
+                if price_eur is None or price_eur < config.CRITERIA.get("min_price_eur", 400) or price_eur > config.CRITERIA.get("max_price_eur", 800):
+                    logger.info(f"🚫 [{listing.source}] Excluded: Нет подтвержденной цены 400-800 EUR ('{listing.price}') | {listing.title}")
+                    database.mark_listing_seen(
+                        uid=listing.uid,
+                        source=listing.source,
+                        title=listing.title,
+                        price=listing.price,
+                        url=listing.url,
+                        sent=0
+                    )
+                    continue
 
                 # Broadcast to Telegram subscribers
                 sent_count = self.notifier.broadcast_listing(listing)

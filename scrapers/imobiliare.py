@@ -58,6 +58,12 @@ class ImobiliareScraper(BaseScraper):
                 title_text = title_el.get_text(strip=True) if title_el else ""
                 title = aria_label or data_name or title_text or "Apartament Timișoara"
 
+                city = card.get("data-city", "")
+                if city and not self.is_timisoara_location(city):
+                    continue
+                if not self.is_timisoara_location(title):
+                    continue
+
                 classes = " ".join(card.get("class", []))
                 is_promoted = "promovat" in classes.lower() or bool(card.select('.promovat, [class*="promovat"]'))
 
@@ -73,6 +79,9 @@ class ImobiliareScraper(BaseScraper):
                 else:
                     price_match = re.search(r'(\d+[\s.]?\d*)\s*€', card.get_text())
                     price = f"{price_match.group(1).replace(' ', '')} €" if price_match else ""
+
+                if not price:
+                    price = self.extract_price_from_text(f"{title} {card.get_text()}") or ""
 
                 # Price filter: strictly 400 - 800 EUR
                 price_eur = self.parse_price_eur(price)
@@ -109,6 +118,8 @@ class ImobiliareScraper(BaseScraper):
                     loc_match = re.search(r'([A-Za-zĂÎÂȘȚăîâșț\s-]+),\s*Timișoara', card.get_text())
                     if loc_match:
                         district = loc_match.group(1).strip()
+                if not self.is_timisoara_location(district):
+                    continue
                 full_address = f"{district}, Timișoara" if district != "Timișoara" else "Timișoara"
                 map_link = self.generate_map_link(address=full_address)
 
@@ -236,11 +247,34 @@ class ImobiliareScraper(BaseScraper):
                 if full_desc:
                     listing.description = full_desc
 
+                # Check breadcrumbs / location
+                bc_text = " ".join([b.get_text(strip=True) for b in soup.select('.breadcrumb, .breadcrumbs, [itemprop="breadcrumb"], .localizare, [class*="locat"]')])
+                if bc_text and not self.is_timisoara_location(bc_text):
+                    listing.exclusion_reason = f"Другой город: {bc_text}"
+                    return None
+
                 # 2. Extract characteristics block text
                 chars_text = ""
                 chars_section = soup.find(id=lambda x: x and "caracteristici" in x)
                 if chars_section:
                     chars_text = chars_section.get_text(" ", strip=True)
+
+                content_text = f"{listing.title} {listing.district} {listing.description} {chars_text}"
+                if not self.is_timisoara_location(content_text):
+                    listing.exclusion_reason = "Описание указывает на другой город/пригород"
+                    return None
+
+                # Fallback price extraction
+                if not listing.price or self.parse_price_eur(listing.price) is None:
+                    p_el = soup.find(class_=lambda c: c and "pret" in str(c).lower()) or soup.find(itemprop="price")
+                    if p_el:
+                        cand_p = p_el.get_text(strip=True)
+                        if cand_p and self.parse_price_eur(cand_p):
+                            listing.price = cand_p
+                    if not listing.price or self.parse_price_eur(listing.price) is None:
+                        cand_p = self.extract_price_from_text(content_text)
+                        if cand_p:
+                            listing.price = cand_p
 
                 # 3. Floor update if page has exact Etaj X/Y or Etaj X
                 m_fl = re.search(r'etaj(?:ul)?[:\s]+(\d+)(?:\s*/\s*(\d+))?', f"{listing.description} {chars_text}", re.IGNORECASE)
