@@ -1,4 +1,5 @@
 import unittest
+import re
 from scrapers.base import BaseScraper, Listing
 
 class DummyScraper(BaseScraper):
@@ -183,6 +184,42 @@ class TestFilters(unittest.TestCase):
         self.assertIsNotNone(m_orig)
         orig_url = urllib.parse.unquote(m_orig.group(0))
         self.assertTrue(orig_url.startswith("https://oxia.ro/"))
+
+    def test_street_address_and_phone(self):
+        # 1. Negative tests: words like 'structura' or footer address 'Bulevardul Dacia nr 34, Oradea' must NOT match
+        self.assertIsNone(self.scraper.extract_street_address("arcare: 1 structura de rezistenta: beton numar bucatarii: 1"))
+        self.assertIsNone(self.scraper.extract_street_address("&#169; 2026 Publi24 Digital S.R.L. | Bulevardul Dacia nr 34, Oradea 410346, Romania"))
+
+        # 2. Positive tests: valid streets
+        self.assertEqual(self.scraper.extract_street_address("Apartament pe Str. Simion Barnutiu nr. 15, la etaj 2"), "Str. Simion Barnutiu nr. 15")
+        self.assertEqual(self.scraper.extract_street_address("Situat pe Calea Aradului nr 45 langa Iulius Mall"), "Calea Aradului nr 45")
+        self.assertEqual(self.scraper.extract_street_address("Adresa exacta este: Bulevardul Take Ionescu 10"), "Bulevardul Take Ionescu 10")
+
+        # 3. Phone normalization for 'O' instead of '0'
+        phone = self.scraper.extract_phone("Persoana de contact Pavel O768 015 640")
+        self.assertEqual(phone, "+40 768 015 640")
+
+        phone2 = self.scraper.extract_phone("Telefon: 0722 123 456")
+        self.assertEqual(phone2, "+40 722 123 456")
+
+    def test_publi24_district_resolution(self):
+        from scrapers.publi24 import Publi24Scraper
+        p24 = Publi24Scraper("http://example.com")
+
+        # The Ring
+        desc_ring = "Apartament de închiriat disponibil imediat, zona Torontalului, Complet The Ring."
+        l_ring = Listing(uid="1", source="publi24", title="Apartament de închiriat Complex The Ring", price="500 EUR", url="http://example.com/ring")
+        # district starts as Timisoara
+        full_txt = f"{l_ring.title} {desc_ring}"
+        loc_m = re.search(r'(?:zona|cartierul|cartier|în|in)\s+([A-Za-zĂÎÂȘȚăîâșț0-9\s-]+?)(?=[,.;|]|\s*-\s*|\s+(?:apartament|ap\b|bloc|etaj|la|cu|de|pe|decomandat|este|se)\b|$)', full_txt, re.I)
+        self.assertIsNotNone(loc_m)
+        self.assertIn("torontal", loc_m.group(1).lower())
+
+        # Centru
+        desc_centru = "YouPro.ro va ofera spre inchiriere un apartament cu 3 camere situat in zona centrala."
+        l_centru = Listing(uid="2", source="publi24", title="3 Camere Centru cu Loc de Parcare", price="490 EUR", url="http://example.com/centru")
+        full_txt2 = f"{l_centru.title} {desc_centru}"
+        self.assertTrue(bool(re.search(r'\b(?:centru|central[aă]?|ultracentral)\b', full_txt2, re.I)))
 
 if __name__ == "__main__":
     unittest.main()

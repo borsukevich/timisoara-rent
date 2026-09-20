@@ -177,9 +177,47 @@ class Publi24Scraper(BaseScraper):
                         district = cand_dist
 
                 if district == "Timișoara":
-                    loc_m = re.search(r'(?:zona|în)\s+([A-Za-zĂÎÂȘȚăîâșț0-9\s-]+?)(?=[,.;|]|\s*-\s*|\s+(?:apartament|ap\b|bloc|etaj|la|cu|de|pe|decomandat)\b|$)', title, re.IGNORECASE)
+                    loc_m = re.search(r'(?:zona|cartierul|cartier|în|in)\s+([A-Za-zĂÎÂȘȚăîâșț0-9\s-]+?)(?=[,.;|]|\s*-\s*|\s+(?:apartament|ap\b|bloc|etaj|la|cu|de|pe|decomandat|este|se)\b|$)', title, re.IGNORECASE)
                     if loc_m:
-                        district = loc_m.group(1).strip()
+                        cand_d = loc_m.group(1).strip()
+                        if cand_d.lower() in ["centrala", "centrală", "centru"]:
+                            district = "Centru"
+                        elif any(k in cand_d.lower() for k in ["torontal", "the ring", "ring"]):
+                            district = "Torontalului"
+                        elif "lipovei" in cand_d.lower():
+                            district = "Lipovei"
+                        elif "aradului" in cand_d.lower():
+                            district = "Calea Aradului"
+                        elif "circumvala" in cand_d.lower():
+                            district = "Circumvalațiunii"
+                        elif any(k in cand_d.lower() for k in ["take", "tache"]):
+                            district = "Take Ionescu"
+                        elif "bucovina" in cand_d.lower():
+                            district = "Bucovina"
+                        elif "mehala" in cand_d.lower():
+                            district = "Mehala"
+                        elif "dacia" in cand_d.lower():
+                            district = "Dacia"
+                        elif "unirii" in cand_d.lower():
+                            district = "Piața Unirii"
+                        elif "cetate" in cand_d.lower():
+                            district = "Cetate"
+                        elif len(cand_d) >= 4 and cand_d.lower() not in ["timisoara", "timișoara", "noua", "bună"]:
+                            district = cand_d.capitalize()
+
+                if district == "Timișoara":
+                    if re.search(r'\b(?:centru|central[aă]?|ultracentral)\b', title, re.I):
+                        district = "Centru"
+                    elif re.search(r'\btorontal\w*\b', title, re.I) or "the ring" in title.lower():
+                        district = "Torontalului"
+                    elif re.search(r'\blipovei\b', title, re.I):
+                        district = "Lipovei"
+                    elif re.search(r'\baradului\b', title, re.I):
+                        district = "Calea Aradului"
+                    elif re.search(r'\bcircumvala[tț]iun\w*\b', title, re.I):
+                        district = "Circumvalațiunii"
+                    elif re.search(r'\b(?:take|tache)\s*ionescu\b', title, re.I):
+                        district = "Take Ionescu"
 
                 full_address = f"{district}, Timișoara" if district != "Timișoara" else "Timișoara"
                 map_link = self.generate_map_link(address=full_address)
@@ -368,8 +406,16 @@ class Publi24Scraper(BaseScraper):
                     listing.build_year = year_int
                     listing.building_type = f"{listing.building_type} | Дом {year_int} года" if listing.building_type != "Обычный фонд" else f"Дом {year_int} года"
 
-            # 5. Extract amenities & contacts from full page text
-            page_text = f"{listing.title} {listing.description} {r.text}"
+            # 5. Extract amenities & contacts from listing text (clean of HTML footer and third-party ads)
+            seller_name = ""
+            seller_el = soup.select_one('.seller-name, .user-name, [class*="seller"]')
+            if seller_el:
+                seller_name = seller_el.get_text(strip=True)
+
+            page_text = f"{listing.title} {listing.description} " + " ".join(f"{k}: {v}" for k, v in specs.items())
+            if seller_name:
+                page_text += f" {seller_name}"
+
             if not listing.build_year:
                 parsed_year = self.extract_build_year(page_text)
                 if parsed_year:
@@ -405,15 +451,63 @@ class Publi24Scraper(BaseScraper):
             if parking_cand != "Не указано":
                 listing.parking_info = parking_cand
 
+            # District detection from full text if still generic
+            if listing.district == "Timișoara":
+                full_txt = f"{listing.title} {listing.description}"
+                loc_m = re.search(r'(?:zona|cartierul|cartier|în|in)\s+([A-Za-zĂÎÂȘȚăîâșț0-9\s-]+?)(?=[,.;|]|\s*-\s*|\s+(?:apartament|ap\b|bloc|etaj|la|cu|de|pe|decomandat|este|se)\b|$)', full_txt, re.IGNORECASE)
+                if loc_m:
+                    cand_d = loc_m.group(1).strip()
+                    if cand_d.lower() in ["centrala", "centrală", "centru"]:
+                        listing.district = "Centru"
+                    elif any(k in cand_d.lower() for k in ["torontal", "the ring", "ring"]):
+                        listing.district = "Torontalului"
+                    elif "lipovei" in cand_d.lower():
+                        listing.district = "Lipovei"
+                    elif "aradului" in cand_d.lower():
+                        listing.district = "Calea Aradului"
+                    elif "circumvala" in cand_d.lower():
+                        listing.district = "Circumvalațiunii"
+                    elif any(k in cand_d.lower() for k in ["take", "tache"]):
+                        listing.district = "Take Ionescu"
+                    elif "bucovina" in cand_d.lower():
+                        listing.district = "Bucovina"
+                    elif "mehala" in cand_d.lower():
+                        listing.district = "Mehala"
+                    elif "dacia" in cand_d.lower():
+                        listing.district = "Dacia"
+                    elif "unirii" in cand_d.lower():
+                        listing.district = "Piața Unirii"
+                    elif "cetate" in cand_d.lower():
+                        listing.district = "Cetate"
+
+                if listing.district == "Timișoara":
+                    if re.search(r'\b(?:centru|central[aă]?|ultracentral)\b', full_txt, re.I):
+                        listing.district = "Centru"
+                    elif re.search(r'\btorontal\w*\b', full_txt, re.I) or "the ring" in full_txt.lower():
+                        listing.district = "Torontalului"
+                    elif re.search(r'\blipovei\b', full_txt, re.I):
+                        listing.district = "Lipovei"
+                    elif re.search(r'\baradului\b', full_txt, re.I):
+                        listing.district = "Calea Aradului"
+                    elif re.search(r'\bcircumvala[tț]iun\w*\b', full_txt, re.I):
+                        listing.district = "Circumvalațiunii"
+                    elif re.search(r'\b(?:take|tache)\s*ionescu\b', full_txt, re.I):
+                        listing.district = "Take Ionescu"
+
             # Exact street address extraction
             street = self.extract_street_address(page_text)
             if street:
                 listing.street = street
-                if listing.district and listing.district != "Timișoara":
+                if listing.district and listing.district != "Timișoara" and listing.district.lower() not in street.lower() and street.lower() not in listing.district.lower():
                     listing.full_address = f"{street}, {listing.district}, Timișoara"
                 else:
                     listing.full_address = f"{street}, Timișoara"
-                listing.map_link = self.generate_map_link(address=listing.full_address)
+            else:
+                if listing.district and listing.district != "Timișoara":
+                    listing.full_address = f"{listing.district}, Timișoara"
+                else:
+                    listing.full_address = "Timișoara"
+            listing.map_link = self.generate_map_link(address=listing.full_address)
 
             # Pets, Availability, Smoking
             listing.pets_policy = self.analyze_pets(page_text)

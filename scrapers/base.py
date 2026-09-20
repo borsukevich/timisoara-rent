@@ -47,7 +47,8 @@ class BaseScraper:
     def extract_phone(self, text: str) -> Optional[str]:
         if not text:
             return None
-        matches = re.findall(r'(?:(?:\+40|0)7[0-9]{2}[\s\.-]?[0-9]{3}[\s\.-]?[0-9]{3})', text)
+        norm_text = re.sub(r'\b[Oo](7\d{2})', r'0\1', text)
+        matches = re.findall(r'(?:(?:\+40|0)7[0-9]{2}[\s\.-]?[0-9]{3}[\s\.-]?[0-9]{3})', norm_text)
         if matches:
             raw = matches[0].replace(" ", "").replace(".", "").replace("-", "")
             if raw.startswith("07"):
@@ -328,23 +329,27 @@ class BaseScraper:
         m = re.search(r'adresa\s*(?:exact[aă])?\s*(?:este)?\s*[:\s-]+([A-Za-zĂÎÂȘȚăîâșț0-9\s.,/-]+?)(?:\n|$)', text, re.IGNORECASE)
         if m:
             cand = m.group(1).strip()
-            cand = re.split(r'\s{2,}|\n', cand)[0].strip(' ,.')
-            cand = re.sub(r',?\s*Timi[sș]oara\b.*', '', cand, flags=re.IGNORECASE).strip(' ,.')
+            cand = re.split(r'\s{2,}|\n', cand)[0].strip(' ,.-|–—')
+            cand = re.sub(r',?\s*Timi[sș]oara\b.*', '', cand, flags=re.IGNORECASE).strip(' ,.-|–—')
+            ctx = text[max(0, m.start() - 100):min(len(text), m.end() + 100)].lower()
             if len(cand) >= 4 and any(w in cand.lower() for w in ['str', 'calea', 'bd', 'bulevard', 'piata', 'aleea', 'splai']):
-                return cand
+                if not any(b in ctx for b in ["oradea", "publi24"]) and "dacia nr 34" not in cand.lower():
+                    return cand
 
         # 2. Match street patterns with optional number
-        prefix_pat = r'(?:strada\s+|str\.?\s*|calea\s+|bulevardul\s+|bd\.?\s*|aleea\s+|splaiul\s+|pia[tț]a\s+)'
-        m_num = re.search(rf'\b({prefix_pat}[A-ZĂÎÂȘȚ][A-Za-zĂÎÂȘȚăîâșț\s.-]+?\s+(?:(?:nr\.?|num[aă]rul)\s*)?\d+[A-Za-z]?)(?=[,.;\n]|\s+(?:la|în|in|cu|de|pe|care|este|se|apartament|bloc)\b|$)', text, re.IGNORECASE)
+        prefix_pat = r'(?:strada\s+|str\.\s*|str\b\s+|calea\s+|bulevardul\s+|bd\.\s*|bd\b\s+|aleea\s+|splaiul\s+|splai\b\s+|pia[tț]a\s+)'
+        m_num = re.search(rf'\b({prefix_pat}[A-ZĂÎÂȘȚ][A-Za-zĂÎÂȘȚăîâșț\s.-]+?\s+(?:(?:nr\.?|num[aă]rul)\s*)?\d+[A-Za-z]?)\b', text, re.IGNORECASE)
         if m_num:
-            cand = m_num.group(1).strip(' ,.')
-            if 4 <= len(cand) <= 60:
+            cand = m_num.group(1).strip(' ,.-|–—')
+            ctx = text[max(0, m_num.start() - 100):min(len(text), m_num.end() + 100)].lower()
+            if 4 <= len(cand) <= 60 and not any(b in ctx for b in ["oradea", "publi24"]) and "dacia nr 34" not in cand.lower():
                 return cand
 
         m_no_num = re.search(rf'\b({prefix_pat}[A-ZĂÎÂȘȚ][A-Za-zĂÎÂȘȚăîâșț\s.-]+?)(?=[,.;\n]|\s+(?:la|în|in|cu|de|pe|care|este|se|apartament|bloc)\b|$)', text, re.IGNORECASE)
         if m_no_num:
-            cand = m_no_num.group(1).strip(' ,.')
-            if 4 <= len(cand) <= 60:
+            cand = m_no_num.group(1).strip(' ,.-|–—')
+            ctx = text[max(0, m_no_num.start() - 100):min(len(text), m_no_num.end() + 100)].lower()
+            if 4 <= len(cand) <= 60 and not any(b in ctx for b in ["oradea", "publi24"]) and "dacia nr 34" not in cand.lower():
                 return cand
 
         return None
